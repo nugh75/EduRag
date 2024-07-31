@@ -1,0 +1,7 @@
+langchain-openai
+langchain-core
+langchain-community
+unstructured[all]
+faiss-cpu
+langchain-huggingface
+
