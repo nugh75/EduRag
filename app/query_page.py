@@ -1,5 +1,3 @@
-# query_page.py
-
 import os
 import streamlit as st
 from langchain_openai import ChatOpenAI
@@ -7,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+from langchain_core.runnables import RunnablePassthrough
 
 def query_page():
     # Variabile per memorizzare tutte le interazioni
@@ -27,14 +25,30 @@ def query_page():
         st.session_state.formatted_context = ""
 
     # Funzione per caricare o creare l'indice FAISS
-    def get_faiss_index(cartella, embeddings):
-        if os.path.exists(cartella):
-            return FAISS.load_local(cartella, embeddings, allow_dangerous_deserialization=True)
+    def get_faiss_index(cartella, embeddings, splits=None):
+        if os.path.exists(cartella) and os.path.exists(os.path.join(cartella, "index.faiss")):
+            try:
+                return FAISS.load_local(cartella, embeddings, allow_dangerous_deserialization=True)
+            except Exception as e:
+                st.error(f"Errore durante il caricamento dell'indice FAISS: {e}")
+                return None
         else:
-            # Supponiamo che 'splits' sia già definito altrove nel tuo codice
-            faiss_index = FAISS.from_documents(splits, embeddings)
-            faiss_index.save_local(cartella)
-            return faiss_index
+            if splits is not None:
+                faiss_index = FAISS.from_documents(splits, embeddings)
+                faiss_index.save_local(cartella)
+                return faiss_index
+            else:
+                st.error("Non ci sono dati disponibili per creare l'indice FAISS.")
+                return None
+
+    # Funzione per ottenere le sotto-cartelle nella cartella 'db'
+    def list_subfolders(db_path):
+        """Restituisce un elenco di sotto-cartelle nella cartella specificata."""
+        try:
+            return [name for name in os.listdir(db_path) if os.path.isdir(os.path.join(db_path, name))]
+        except FileNotFoundError:
+            st.error("La cartella 'db' non esiste. Assicurati che la struttura delle cartelle sia corretta.")
+            return []
 
     # Interfaccia Streamlit
     st.title("Edubot")
@@ -52,8 +66,16 @@ def query_page():
     # Campo per la query
     st.session_state.user_query = st.text_input("Inserisci la tua domanda", st.session_state.user_query)
 
+    # Recupera le sotto-cartelle dalla cartella 'db'
+    db_path = "db"
+    subfolders = list_subfolders(db_path)
+
+    if not subfolders:
+        st.error("Nessuna sotto-cartella trovata nella cartella 'db'. Assicurati che ci siano dati disponibili per la ricerca.")
+        return
+
     # Campo per l'argomento (Nota: st.selectbox ritorna il valore selezionato, non l'indice)
-    argomento = st.selectbox("Seleziona l'argomento", ["linguistica"])
+    argomento = st.selectbox("Seleziona l'argomento", subfolders)
 
     # Slider per il chunk da recuperare
     similarity_k = st.slider("chunk da recuperare", 1, 15, 4, help="Nel contesto del Recupero delle Informazioni con i Grandi Modelli di Linguaggio (RAG), i chunk sono segmenti di testo suddivisi da documenti più grandi. Questa suddivisione ottimizza l'elaborazione del modello, mantiene il contesto semantico e migliora la precisione del recupero delle informazioni rilevanti per una query specifica")
@@ -64,11 +86,16 @@ def query_page():
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L12-v2")
 
         # Carica o crea l'indice FAISS con la cartella specificata
-        faiss_index = get_faiss_index(argomento, embeddings)
+        faiss_index = get_faiss_index(os.path.join(db_path, argomento), embeddings)
+
+        if faiss_index is None:
+            st.error("Impossibile caricare o creare l'indice FAISS.")
+            return
+
         retriever = faiss_index.as_retriever(search_type="similarity", search_kwargs={"k": similarity_k})
 
         # Configurazione del prompt
-        prompt = ChatPromptTemplate.from_template("Sei un assistente preciso e attento; prima di tutto dai le definizioni o i termini più importati, poi nella spiegazione aiutati con degli esempi che possono essere tratti dalle tue conoscenze o inventati, se sono inventati da te specificalo. Rispondi a questa domanda in italiano: {question}, considera il seguente contesto {context}. Quando parli di contesto di \" secondo le mie conoscenze\" ")
+        prompt = ChatPromptTemplate.from_template("Sei un assistente preciso e attento; prima di tutto dai le definizioni o i termini più importati, poi nella spiegazione aiutati con degli esempi che possono essere tratti dalle tue conoscenze o inventati, se sono inventati da te specificalo. Rispondi a questa domanda in italiano: {question}, considera il seguente contesto {context}. Quando parli di contesto di \" secondo le mie conoscenze \" rispondi in italiano")
 
         def format_documents(all_documents):
             formatted_docs = []
@@ -158,3 +185,4 @@ def query_page():
             file_name="conversazione.txt",
             mime="text/plain"
         )
+

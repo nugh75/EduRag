@@ -1,5 +1,3 @@
-# pdf_processing_page.py
-
 import os
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -22,7 +20,10 @@ def pdf_processing_page():
     chunk_overlap = st.number_input("Sovrapposizione tra i chunk:", min_value=0, max_value=1000, value=200)
     min_chunk_length = st.number_input("Lunghezza minima di un chunk:", min_value=50, max_value=1000, value=100)
     embeddings_model_name = st.text_input("Nome del modello di embeddings:", "sentence-transformers/all-MiniLM-L12-v2")
-    faiss_index_folder = st.text_input("Nome della cartella per l'indice FAISS:", "OFA")
+    subfolder_name = st.text_input("Nome della sotto-cartella per l'indice FAISS:", "OFA")
+
+    # Cartella per l'indice FAISS è fissata a 'db/<nome_sotto_cartella>'
+    faiss_index_folder = os.path.join("db", subfolder_name)
 
     # Bottone per iniziare il processamento
     if st.button("Esegui"):
@@ -32,6 +33,8 @@ def pdf_processing_page():
                 loader = PyPDFLoader(file_path=file_path)
                 documents = loader.load()
                 logging.info(f"Caricato: {file_path}")
+                if not documents:
+                    logging.warning(f"Nessun contenuto trovato in {file_path}")
                 return documents
             except Exception as e:
                 logging.error(f"Errore nel caricamento del file {file_path}: {e}")
@@ -53,9 +56,11 @@ def pdf_processing_page():
                 for future in futures:
                     all_documents.extend(future.result())
 
-            # Funzione per formattare i documenti
-            def format_documents(documents):
-                return "\n\n".join(doc.page_content for doc in documents if hasattr(doc, 'page_content'))
+            # Verifica se ci sono documenti caricati
+            if not all_documents:
+                st.error("Nessun documento PDF è stato caricato. Verifica i file nella cartella specificata.")
+                logging.error("Nessun documento PDF è stato caricato. Verifica i file nella cartella specificata.")
+                return
 
             # Inizializzare il Text Splitter
             text_splitter = RecursiveCharacterTextSplitter(
@@ -66,8 +71,23 @@ def pdf_processing_page():
             # Suddividere i documenti in chunk
             splits = text_splitter.split_documents(all_documents)
 
+            # Verifica del numero di chunk generati
+            if not splits:
+                st.error("Non ci sono chunk di testo generati dai documenti PDF.")
+                logging.error("Non ci sono chunk di testo generati dai documenti PDF.")
+                return
+
             # Rimuovere i chunk troppo piccoli
             splits = [sp for sp in splits if len(sp.page_content) >= min_chunk_length]
+
+            # Log del numero di chunk finali
+            logging.info(f"Numero di chunk di testo processati: {len(splits)}")
+
+            # Verifica se ci sono split da indicizzare
+            if not splits:
+                logging.error("Non ci sono chunk di testo disponibili per l'indicizzazione FAISS.")
+                st.error("Non ci sono chunk di testo disponibili per l'indicizzazione FAISS.")
+                return
 
             # Inizializzare il modello di embedding
             embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
@@ -99,3 +119,5 @@ def pdf_processing_page():
                 st.error(f"Errore durante la gestione dell'indice FAISS: {e}")
         else:
             st.error("La cartella specificata non esiste.")
+            logging.error("La cartella specificata non esiste.")
+
