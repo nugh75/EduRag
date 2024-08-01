@@ -60,7 +60,7 @@ Su Windows:
 myenv\\Scripts\\activate
 
 ```
-###3. Installa le Dipendenze
+### 3. Installa le Dipendenze
 Installa i pacchetti richiesti utilizzando il file requirements.txt:
 
 ```bash
@@ -76,7 +76,7 @@ Esegui l'applicazione Streamlit:
 ```bash
 streamlit run main.py
 ```
-###Utilizzo
+### Utilizzo
 Dopo aver avviato l'applicazione, utilizza la barra di navigazione in alto per esplorare le diverse funzionalità:
 
 Home: Introduzione e descrizione delle funzionalità di Edubot.
@@ -92,8 +92,8 @@ Fai commit delle tue modifiche: git commit -m 'Aggiungi una nuova feature'.
 Fai push al branch: git push origin feature/nome-feature.
 Invia una pull request.
 
-##Disclaimer
+## Disclaimer
 Le informazioni fornite da Edubot devono essere verificate. I modelli di linguaggio possono dare risposte non sempre accurate. È consigliabile controllare le fonti.
 
-##Licenza
+## Licenza
 Questo progetto è distribuito sotto la licenza GPL3. Vedi il file LICENSE per i dettagli.
