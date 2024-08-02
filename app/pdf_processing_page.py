@@ -11,16 +11,16 @@ def pdf_processing_page():
     # Configurazione del logging
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-    # Titolo dell'applicazione Streamlit
-    st.title("PDF Processor with FAISS Indexing")
+    # # Titolo dell'applicazione Streamlit
+    # st.title("Chunkizzazione dei PDF e Creazione di un Database Indicizzato dei Documenti")
 
     # Input dell'utente tramite Streamlit
     folder_path = st.text_input("Percorso della cartella contenente i PDF:", "/home/nugh75/git-repository/Edubot/emedia-M")
     chunk_size = st.number_input("Dimensione dei chunk di testo:", min_value=100, max_value=5000, value=1500)
     chunk_overlap = st.number_input("Sovrapposizione tra i chunk:", min_value=0, max_value=1000, value=200)
     min_chunk_length = st.number_input("Lunghezza minima di un chunk:", min_value=50, max_value=1000, value=100)
-    embeddings_model_name = st.text_input("Nome del modello di embeddings:", "sentence-transformers/all-MiniLM-L12-v2")
-    subfolder_name = st.text_input("Nome della sotto-cartella per l'indice FAISS:", "OFA")
+    embeddings_model_name = st.text_input("Modello di embeddings:", "sentence-transformers/all-MiniLM-L12-v2")
+    subfolder_name = st.text_input("Indice:", "Qui metti il nome dell'indice")
 
     # Cartella per l'indice FAISS è fissata a 'db/<nome_sotto_cartella>'
     faiss_index_folder = os.path.join("db", subfolder_name)

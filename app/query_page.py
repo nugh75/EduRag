@@ -50,15 +50,8 @@ def query_page():
             st.error("La cartella 'db' non esiste. Assicurati che la struttura delle cartelle sia corretta.")
             return []
 
-    # Interfaccia Streamlit
-    st.title("Edubot")
-
-    # Allert informativo
-    st.info("""
-    Questo è un chatbot con un'intelligenza artificiale Llama3 che utilizza la tecnologia RAG (Retrieval-Augmented Generation) 
-    per interagire su un contenuto specifico. RAG è una tecnologia avanzata che combina modelli di recupero delle informazioni 
-    e modelli di generazione di testo per fornire risposte pertinenti e accurate basate su un contesto specifico.
-    """)
+    # # Interfaccia Streamlit
+    # st.title("Edubot")
 
     # Campo per la temperatura
     temperature = st.slider("Temperatura", 0.0, 1.0, 0.2, help="La temperatura nei modelli di linguaggio (LLM) regola la casualità delle risposte generate: valori bassi (vicini a 0) rendono le risposte più deterministiche e ripetitive, mentre valori più alti introducono maggiore variabilità e creatività. Un'alta temperatura consente al modello di esplorare una gamma più ampia di opzioni, generando risposte più diverse e meno prevedibili.")
@@ -95,7 +88,7 @@ def query_page():
         retriever = faiss_index.as_retriever(search_type="similarity", search_kwargs={"k": similarity_k})
 
         # Configurazione del prompt
-        prompt = ChatPromptTemplate.from_template("Sei un assistente preciso e attento; prima di tutto dai le definizioni o i termini più importati, poi nella spiegazione aiutati con degli esempi che possono essere tratti dalle tue conoscenze o inventati, se sono inventati da te specificalo. Rispondi a questa domanda in italiano: {question}, considera il seguente contesto {context}. Quando parli di contesto di \" secondo le mie conoscenze \" rispondi in italiano")
+        prompt = ChatPromptTemplate.from_template("Sei un assistente preciso e attento; prima di tutto dai le definizioni o i termini più importati, poi nella spiegazione aiutati con degli esempi che possono essere tratti dalle tue conoscenze o inventati, se sono inventati da te specificalo. Rispondi a questa domanda in italiano: {question}, considera il seguente contesto {context}. Quando parli di contesto di \" secondo le mie conoscenze\" ")
 
         def format_documents(all_documents):
             formatted_docs = []
