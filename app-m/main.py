@@ -90,7 +90,7 @@ def main():
     st.title("Edubot")
 
     # Barra di navigazione in alto
-    menu = ["Home", "Creazione db indicizzato", "Query", "Visualizza e rimuovi db indicizzato", "Aggiungi PDF a db indicizzato", "Rimuovi PDF a db indicizzato"]
+    menu = ["Home", "Creazione db indicizzato", "Query","Query gpt-4o-mini", "Visualizza e rimuovi db indicizzato", "Aggiungi PDF a db indicizzato", "Rimuovi PDF a db indicizzato"]
     pagina = st.radio("Navigazione", menu, horizontal=True)
 
     # Messaggio di benvenuto nella barra laterale
@@ -110,7 +110,7 @@ def main():
     **Disclaimer:**
     Le informazioni fornite da Edubot devono essere verificate. I modelli di linguaggio possono dare risposte non sempre accurate. È consigliabile controllare le fonti.
     
-    ---
+    
     """)
 
     # Logica per visualizzare il contenuto della pagina selezionata
@@ -127,6 +127,11 @@ def main():
         st.header("Query")
         from query_page import query_page
         query_page()
+        
+    elif pagina == "Query gpt-4o-mini":
+        st.header("Query gpt-4o-mini")
+        from query_pageg import query_pageg
+        query_pageg()
         
     elif pagina == "Visualizza e rimuovi db indicizzato":
         st.header("Visualizza e rimuovi db indicizzato")

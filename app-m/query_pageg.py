@@ -1,3 +1,5 @@
+
+
 import os
 import streamlit as st
 from langchain_openai import ChatOpenAI
@@ -6,8 +8,15 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.runnables import RunnablePassthrough
+from dotenv import load_dotenv
 
-def query_page():
+# Carica le variabili d'ambiente dal file .env
+load_dotenv()
+
+# Ottieni la chiave API da una variabile d'ambiente
+api_key = os.getenv("OPENAI_API_KEY")
+
+def query_pageg():
     # Variabile per memorizzare tutte le interazioni
     if 'interazioni' not in st.session_state:
         st.session_state.interazioni = []
@@ -72,7 +81,7 @@ def query_page():
 
     if st.button("Invia"):
         # Impostazioni configurazione
-        model = ChatOpenAI(base_url="http://localhost:11434/v1", temperature=temperature, api_key="not-need", model_name="phi3")
+        model = ChatOpenAI(temperature=temperature,  model_name="gpt-4o-mini")
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L12-v2")
 
         # Carica o crea l'indice FAISS con la cartella specificata
