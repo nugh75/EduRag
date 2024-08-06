@@ -1,4 +1,5 @@
 import os
+import shutil
 import logging
 import streamlit as st
 from utils import leggi_descrizioni_e_documenti
@@ -6,7 +7,7 @@ from utils import leggi_descrizioni_e_documenti
 # Configurazione del logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def view_and_rename_indexes():
+def vedi_e_gestisci_db():
     # Percorso della cartella dove sono salvati gli indici FAISS
     faiss_index_folder = "db"
 
@@ -29,11 +30,11 @@ def view_and_rename_indexes():
 
     # Mostra gli indici disponibili
     if indici_info:
-        # Usa selectbox per selezionare un indice da rinominare
+        # Usa selectbox per selezionare un indice da gestire
         indice_nomi = [indice['nome'] for indice in indici_info]
-        selected_index = st.selectbox("Seleziona un indice per rinominare:", indice_nomi, key='selected_index')
+        selected_index = st.selectbox("Seleziona un indice per gestire:", indice_nomi, key='selected_index')
 
-        logging.info(f"Indice selezionato per la rinominazione: {selected_index}")
+        logging.info(f"Indice selezionato: {selected_index}")
 
         # Mostra i dettagli dell'indice selezionato
         selected_info = next((indice for indice in indici_info if indice["nome"] == selected_index), None)
@@ -61,19 +62,49 @@ def view_and_rename_indexes():
                         os.rename(old_path, new_path)
                         st.success(f"Indice '{selected_index}' rinominato in '{new_index_name}'.")
                         logging.info(f"Indice '{selected_index}' rinominato in '{new_index_name}' con successo.")
-                        # Clear session state to force refresh
-                        st.session_state.pop('selected_index', None)
-                        st.session_state.pop('new_index_name', None)
-                        st.experimental_rerun()
+                        # Trigger page refresh
+                        try:
+                            st.experimental_rerun()
+                        except:
+                            st.write('<script>window.location.reload();</script>', unsafe_allow_html=True)
                     except Exception as e:
                         st.error(f"Errore durante la rinominazione: {e}")
                         logging.error(f"Errore durante la rinominazione dell'indice '{selected_index}': {e}")
             else:
                 st.warning("Inserisci un nome valido per rinominare l'indice.")
                 logging.warning("Tentativo di rinominare senza fornire un nuovo nome.")
+
+        # Funzione per cancellare l'indice selezionato
+        st.write("### Cancella Indice")
+        if st.checkbox(f"Conferma la cancellazione dell'indice '{selected_index}'"):
+            if st.button("Cancella Indice"):
+                index_path = os.path.join(faiss_index_folder, selected_index)
+                logging.info(f"Tentativo di cancellazione dell'indice: {selected_index} nel percorso {index_path}")
+                if os.path.exists(index_path):
+                    try:
+                        logging.info(f"Sto per cancellare la directory: {index_path}")
+                        shutil.rmtree(index_path)
+                        logging.info(f"shutil.rmtree eseguito per: {index_path}")
+                        if not os.path.exists(index_path):  # Verifica che la directory sia stata effettivamente rimossa
+                            st.success(f"Indice '{selected_index}' cancellato con successo.")
+                            logging.info(f"Indice '{selected_index}' cancellato con successo.")
+                            # Trigger page refresh
+                            try:
+                                st.experimental_rerun()
+                            except:
+                                st.write('<script>window.location.reload();</script>', unsafe_allow_html=True)
+                        else:
+                            st.error(f"Non è stato possibile cancellare l'indice '{selected_index}'.")
+                            logging.error(f"Non è stato possibile cancellare l'indice '{selected_index}'. La cartella esiste ancora.")
+                    except Exception as e:
+                        st.error(f"Errore durante la cancellazione dell'indice '{selected_index}': {e}")
+                        logging.error(f"Errore durante la cancellazione dell'indice '{selected_index}': {e}")
+                else:
+                    st.warning(f"L'indice '{selected_index}' non esiste o è già stato cancellato.")
+                    logging.warning(f"Tentativo di cancellazione di un indice inesistente: {selected_index}")
     else:
         st.write("Nessun indice disponibile.")
         logging.info("Nessun indice disponibile per la visualizzazione o la rinominazione.")
 
 if __name__ == "__main__":
-    view_and_rename_indexes()
+    vedi_e_gestisci_db()

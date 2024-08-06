@@ -6,7 +6,7 @@ from utils import leggi_descrizioni_e_documenti
 # Configurazione del logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def view_and_rename_indexes():
+def vedi_e_rinomina_db():
     # Percorso della cartella dove sono salvati gli indici FAISS
     faiss_index_folder = "db"
 
@@ -76,4 +76,4 @@ def view_and_rename_indexes():
         logging.info("Nessun indice disponibile per la visualizzazione o la rinominazione.")
 
 if __name__ == "__main__":
-    view_and_rename_indexes()
+    vedi_e_rinomina_db()

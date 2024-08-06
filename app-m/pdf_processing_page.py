@@ -1,5 +1,3 @@
-# pdf_processing_page.py
-
 import os
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -9,6 +7,10 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.docstore.document import Document
+import pdfplumber
+from pdfminer.high_level import extract_text
+from pdfminer.pdfparser import PDFSyntaxError
+
 
 def pdf_processing_page():
     # Configurazione del logging
@@ -33,20 +35,28 @@ def pdf_processing_page():
         # Funzione per caricare documenti PDF e ottenere titoli
         def load_pdf(file_path):
             try:
-                loader = PyPDFLoader(file_path=file_path)
-                documents = loader.load()
+                # Caricare i metadati del PDF
+                metadata = extract_metadata(file_path)
+
+                # Caricare il contenuto strutturato del PDF
+                structured_content, document_map = extract_structured_content(file_path)
+
+                # Creare documenti con i metadati
+                documents = create_documents_with_metadata(structured_content, metadata)
+
                 if documents:
                     logging.info(f"Caricato: {file_path} con {len(documents)} documenti.")
                 else:
                     logging.warning(f"Nessun contenuto trovato in {file_path}")
-                return documents
+                return documents, document_map
             except Exception as e:
                 logging.error(f"Errore nel caricamento del file {file_path}: {str(e)}")
-                return []
+                return [], {}
 
         # Lista per memorizzare tutti i documenti caricati e i loro titoli
         all_documents = []
         pdf_titles = []
+        document_maps = {}
 
         # Verifica se la cartella esiste
         if os.path.exists(folder_path):
@@ -59,8 +69,10 @@ def pdf_processing_page():
                         futures.append(executor.submit(load_pdf, pdf_path))
                         pdf_titles.append(filename)  # Memorizza il titolo del PDF
 
-                for future in futures:
-                    all_documents.extend(future.result())
+                for future, title in zip(futures, pdf_titles):
+                    documents, document_map = future.result()
+                    all_documents.extend(documents)
+                    document_maps[title] = document_map
 
             # Verifica se ci sono documenti caricati
             if not all_documents:
@@ -110,7 +122,58 @@ def pdf_processing_page():
                 for title in pdf_titles:
                     desc_file.write(f"- {title}\n")
 
+            # Salvare la mappa dei documenti
+            map_file_path = os.path.join(faiss_index_folder, "document_map.json")
+            with open(map_file_path, "w") as map_file:
+                import json
+                json.dump(document_maps, map_file, indent=4)
+
             st.success(f"Indice '{subfolder_name}' creato con successo.")
+
+
+def extract_metadata(file_path):
+    """Estrae i metadati dal PDF."""
+    metadata = {}
+    try:
+        text = extract_text(file_path)
+        metadata['title'] = os.path.basename(file_path)
+        metadata['text'] = text
+    except PDFSyntaxError as e:
+        logging.error(f"Errore nell'estrazione dei metadati dal file {file_path}: {e}")
+    return metadata
+
+
+def extract_structured_content(file_path):
+    """Estrae il contenuto strutturato dal PDF e crea una mappa del documento."""
+    with pdfplumber.open(file_path) as pdf:
+        structured_content = []
+        document_map = {}  # Mappa del documento
+        for page_number, page in enumerate(pdf.pages):
+            text = page.extract_text()
+            sections = text.split('\n\n')  # Suddivisione basata su paragrafi
+            structured_content.extend(sections)
+
+            # Aggiungi i dettagli della pagina alla mappa del documento
+            document_map[f"Page {page_number + 1}"] = {
+                "text": text,
+                "sections": sections,
+                "page_number": page_number + 1
+            }
+
+    return structured_content, document_map
+
+
+def create_documents_with_metadata(chunks, metadata):
+    """Crea documenti con metadati dai chunk di testo."""
+    docs = []
+    for chunk in chunks:
+        doc = Document(
+            page_content=chunk,
+            metadata=metadata
+        )
+        docs.append(doc)
+    return docs
+
 
 if __name__ == "__main__":
     pdf_processing_page()

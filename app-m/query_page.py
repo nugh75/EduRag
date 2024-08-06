@@ -6,6 +6,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.runnables import RunnablePassthrough
+import json
 
 
 def query_page():
@@ -74,12 +75,15 @@ def query_page():
             search_type="similarity", search_kwargs={"k": similarity_k}
         )
 
+        # Carica la mappa dei documenti
+        document_map = load_document_map(os.path.join(db_path, argomento))
+
         # Configurazione del prompt
         prompt = ChatPromptTemplate.from_template(
             "Sei un assistente preciso e attento; prima di tutto dai le definizioni o i termini più importati, poi nella spiegazione aiutati con degli esempi che possono essere tratti dalle tue conoscenze o inventati, se sono inventati da te specificalo. Rispondi a questa domanda in italiano: {question}, considera il seguente contesto {context}. Quando parli di contesto di \" secondo le mie conoscenze\" "
         )
 
-        rag_chain = build_rag_chain(prompt, model, retriever)
+        rag_chain = build_rag_chain(prompt, model, retriever, document_map)
 
         # Esegui la query e mostra la risposta
         st.session_state.last_response = query_stream(
@@ -88,7 +92,8 @@ def query_page():
 
         # Formatta i documenti recuperati per aggiungerli alla conversazione
         st.session_state.formatted_context = format_documents(
-            retriever.get_relevant_documents(st.session_state.user_query)
+            retriever.get_relevant_documents(st.session_state.user_query),
+            document_map
         )
 
         # Aggiungi la domanda, la risposta e le informazioni aggiuntive alla lista delle interazioni
@@ -144,7 +149,7 @@ def init_session_state():
 
 def configure_ui():
     """Configura gli elementi dell'interfaccia utente."""
-    st.title("Sistema di Recupero delle Informazioni")
+    #st.title("Sistema di Recupero delle Informazioni")
     st.write(
         "Interagisci con il sistema di retrieval per ottenere risposte basate sui documenti."
     )
@@ -177,20 +182,32 @@ def get_faiss_index(cartella, embeddings, splits=None):
         return None
 
 
-def build_rag_chain(prompt, model, retriever):
+def load_document_map(cartella):
+    """Carica la mappa dei documenti da file."""
+    map_path = os.path.join(cartella, "document_map.json")
+    try:
+        with open(map_path, "r") as map_file:
+            return json.load(map_file)
+    except FileNotFoundError:
+        st.error("Impossibile trovare la mappa dei documenti.")
+        return {}
+
+
+def build_rag_chain(prompt, model, retriever, document_map):
     """Crea la catena RAG per eseguire la query."""
     return {
-        "context": retriever | format_documents,
+        "context": retriever | format_documents_with_map(document_map),
         "question": RunnablePassthrough(),
     } | prompt | model | StrOutputParser()
 
 
-def format_documents(all_documents):
+def format_documents(all_documents, document_map):
     """Formatta i documenti recuperati per l'output."""
     formatted_docs = []
     for doc in all_documents:
-        source = doc.metadata.get("source", "Sconosciuto")
+        source = doc.metadata.get("title", "Sconosciuto")
         page = doc.metadata.get("page", "Sconosciuta")
+        sections = document_map.get(source, {}).get(f"Page {page}", {}).get("sections", [])
 
         # Gestire il caso in cui la pagina non sia un numero
         try:
@@ -199,10 +216,20 @@ def format_documents(all_documents):
             # Se la pagina non è un numero, mantieni 'Sconosciuta' o un valore predefinito
             page_number = "Sconosciuta"
 
+        # Aggiungi le sezioni pertinenti
+        relevant_sections = "\n\n".join(sections[:3])  # Prendi solo le prime 3 sezioni come esempio
+
         formatted_docs.append(
-            f"Fonte: {source}, Pagina: {page_number} \n\n ...{doc.page_content}..."
+            f"Fonte: {source}, Pagina: {page_number}\n\nSezioni rilevanti:\n{relevant_sections}\n\n...{doc.page_content}..."
         )
     return "\n\n---------------------------\n\n".join(formatted_docs)
+
+
+def format_documents_with_map(document_map):
+    """Formatta i documenti con l'uso della mappa per l'output."""
+    def inner(all_documents):
+        return format_documents(all_documents, document_map)
+    return inner
 
 
 def query_stream(query, rag_chain):
