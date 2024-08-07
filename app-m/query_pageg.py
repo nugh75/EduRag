@@ -7,13 +7,14 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.runnables import RunnablePassthrough
 import json
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 
 # Load environment variables from the .env file
-load_dotenv()
+#load_dotenv()
 
 # Get the API key from an environment variable
 api_key = os.getenv("OPENAI_API_KEY")
+
 
 def query_pageg():
     # Initialize session state
@@ -21,7 +22,8 @@ def query_pageg():
 
     # Configure the user interface
     configure_ui()
-
+           
+    
     # Temperature slider
     temperature = st.slider(
         "Temperatura",
@@ -35,7 +37,8 @@ def query_pageg():
     st.session_state.user_query = st.text_input(
         "Inserisci la tua domanda", st.session_state.user_query
     )
-
+    
+    
     # Retrieve subfolders from the 'db' directory
     db_path = "db"
     subfolders = list_subfolders(db_path)
@@ -61,7 +64,7 @@ def query_pageg():
     if st.button("Invia"):
         # Configuration settings
         model = ChatOpenAI(temperature=temperature, model_name="gpt-4o-mini")
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L12-v2")
+        embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-mpnet-base-v2')
 
         # Load or create the FAISS index with the specified folder
         faiss_index = get_faiss_index(os.path.join(db_path, argomento), embeddings)
@@ -74,39 +77,67 @@ def query_pageg():
             search_type="similarity", search_kwargs={"k": similarity_k}
         )
 
-        # Load the document map
-        document_map = load_document_map(os.path.join(db_path, argomento))
-
         # Prompt configuration
         prompt = ChatPromptTemplate.from_template(
-            "Sei un assistente preciso e attento; prima di tutto dai le definizioni o i termini più importati, poi nella spiegazione aiutati con degli esempi che possono essere tratti dalle tue conoscenze o inventati, se sono inventati da te specificalo. Rispondi a questa domanda in italiano: {question}, considera il seguente contesto {context}. Quando parli di contesto di \" secondo le mie conoscenze\" "
+            """
+            Sei un assistente preciso e attento. Rispondi alla seguente domanda in italiano: {question}. Usa il contesto fornito: {context}.
+            
+            Struttura la tua risposta scegliendo l'approccio più adatto in base al tipo di domanda:
+
+            - **Definizione di un concetto:**
+              - **Definizione chiara:** Inizia con una definizione precisa e concisa dei termini o concetti chiave.
+              - **Dettagli aggiuntivi:** Approfondisci con dettagli rilevanti che migliorano la comprensione del concetto.
+              - **Esempi:** Fornisci esempi concreti, specificando se sono inventati.
+
+            - **Confronto tra concetti:**
+              - **Introduzione ai concetti:** Presenta brevemente i due concetti principali coinvolti nel confronto.
+              - **Somiglianze e differenze:** Esplora le somiglianze e le differenze tra i concetti.
+              - **Esempi:** Usa esempi per chiarire i punti di confronto, specificando se sono inventati.
+
+            - **Argomentazioni su una domanda:**
+              - **Introduzione alla questione:** Fornisci una breve panoramica della domanda o del problema.
+              - **Argomentazione a favore:** Sviluppa argomenti a sostegno della domanda o tesi.
+              - **Argomentazione contro:** Presenta argomenti contrari o critici.
+              - **Esempi:** Illustra le argomentazioni con esempi specifici, indicando se sono inventati.
+
+            - **Possibili riflessioni su una domanda:**
+              - **Analisi critica:** Offri un'analisi critica della domanda, esplorando diverse prospettive.
+              - **Implicazioni:** Discuti le implicazioni della domanda nei diversi contesti.
+              - **Conclusione:** Concludi con una riflessione personale, collegando il tutto al contesto fornito.
+
+            Durante la tua risposta, integra sempre il contesto fornito ({context}) per arricchire e specificare le informazioni. Utilizza un linguaggio chiaro e formale, assicurandoti che la risposta sia coerente e ben strutturata.
+              Concludi sempre dicendo che sei un intelligenza artificiale e che le tue affermazioni devono essere sempre raffrontate con delle fonti affidabili. Inoltre, sempre alla fine cita la fonte delle tue affermazioni con testo da cui hai preso l'informazione e la pagina
+            """
         )
 
-        rag_chain = build_rag_chain(prompt, model, retriever, document_map)
+        rag_chain = build_rag_chain(prompt, model, retriever)
 
         # Execute the query and display the response
-        st.session_state.last_response = query_stream(
-            st.session_state.user_query, rag_chain
-        )
+        try:
+            st.session_state.last_response = query_stream(
+                st.session_state.user_query, rag_chain
+            )
 
-        # Format retrieved documents to add them to the conversation
-        st.session_state.formatted_context = format_documents(
-            retriever.get_relevant_documents(st.session_state.user_query),
-            document_map
-        )
+            # Format retrieved documents to add them to the conversation
+            st.session_state.formatted_context = format_documents(
+                retriever.get_relevant_documents(st.session_state.user_query)
+            )
 
-        # Add the question, answer, and additional information to the list of interactions
-        add_interaction(
-            st.session_state.user_query,
-            st.session_state.last_response,
-            temperature,
-            similarity_k,
-            argomento,
-            st.session_state.formatted_context,
-        )
+            # Add the question, answer, and additional information to the list of interactions
+            add_interaction(
+                st.session_state.user_query,
+                st.session_state.last_response,
+                temperature,
+                similarity_k,
+                argomento,
+                st.session_state.formatted_context,
+            )
 
-        # Reset the query after obtaining the response
-        st.session_state.user_query = ""
+            # Reset the query after obtaining the response
+            st.session_state.user_query = ""
+        except Exception as e:
+            st.error(f"Si è verificato un errore durante l'esecuzione della query: {e}")
+            return
 
     # Display the current question and answer
     if st.session_state.last_response:
@@ -148,7 +179,6 @@ def init_session_state():
 
 def configure_ui():
     """Configure user interface elements."""
-    #st.title("Sistema di Recupero delle Informazioni")
     st.write(
         "Interagisci con il sistema di retrieval per ottenere risposte basate sui documenti."
     )
@@ -183,54 +213,26 @@ def get_faiss_index(cartella, embeddings, splits=None):
         return None
 
 
-def load_document_map(cartella):
-    """Load the document map from a file."""
-    map_path = os.path.join(cartella, "document_map.json")
-    try:
-        with open(map_path, "r") as map_file:
-            return json.load(map_file)
-    except FileNotFoundError:
-        st.error("Impossibile trovare la mappa dei documenti.")
-        return {}
-
-
-def build_rag_chain(prompt, model, retriever, document_map):
+def build_rag_chain(prompt, model, retriever):
     """Create the RAG chain to execute the query."""
     return {
-        "context": retriever | format_documents_with_map(document_map),
+        "context": retriever,
         "question": RunnablePassthrough(),
     } | prompt | model | StrOutputParser()
 
 
-def format_documents(all_documents, document_map):
+def format_documents(all_documents):
     """Format retrieved documents for output."""
     formatted_docs = []
     for doc in all_documents:
         source = doc.metadata.get("title", "Sconosciuto")
-        page = doc.metadata.get("page", "Sconosciuta")
-        sections = document_map.get(source, {}).get(f"Page {page}", {}).get("sections", [])
-
-        # Handle the case where the page is not a number
-        try:
-            page_number = int(page) + 1
-        except (ValueError, TypeError):
-            # If the page is not a number, keep 'Unknown' or a default value
-            page_number = "Sconosciuta"
+        page = doc.metadata.get("page_number", "Sconosciuta")
 
         # Add relevant sections
-        relevant_sections = "\n\n".join(sections[:3])  # Take only the first 3 sections as an example
-
         formatted_docs.append(
-            f"Fonte: {source}, Pagina: {page_number}\n\nSezioni rilevanti:\n{relevant_sections}\n\n...{doc.page_content}..."
+            f"Fonte: {source}, Pagina: {page}\n\n...{doc.page_content}..."
         )
     return "\n\n---------------------------\n\n".join(formatted_docs)
-
-
-def format_documents_with_map(document_map):
-    """Format documents using the map for output."""
-    def inner(all_documents):
-        return format_documents(all_documents, document_map)
-    return inner
 
 
 def query_stream(query, rag_chain):

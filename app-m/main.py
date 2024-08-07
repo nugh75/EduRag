@@ -5,6 +5,7 @@ from add_pdfs_to_index import add_pdfs_to_existing_index # Aggiunge PDF a un dat
 from remove_pdfs_from_index import remove_pdfs_from_index # Rimuove PDF da un database esistente
 from query_page import query_page                       # Gestisce le query su un database specifico
 from query_pageg import query_pageg                     # Gestisce le query su un database specifico usando GPT-4o-mini
+from openk import openk                    # Gestisce le query su un database specifico usando GPT-4o-mini con le proprie chiavi
 
 def descrizione_edubot():
     descrizione = """
@@ -67,8 +68,9 @@ def main():
         "Crea db indicizzato", 
         "Aggiungi PDF a db", 
         "Rimuovi PDF da db", 
-        "Esegui Query",
-        "Esegui Query con GPT-4o-mini"
+        "Esegui Query con Ollama",
+        "Esegui Query con GPT-4o-mini",
+        "Esegui Query con GPT-40-mini con la tua Key"
     ]
     pagina = st.radio("Navigazione", menu, horizontal=True)
 
@@ -82,6 +84,7 @@ def main():
     - **Rimuovi PDF da db**: rimuovi documenti PDF esistenti da un database indicizzato.
     - **Esegui Query**: interroga un database indicizzato per ottenere informazioni specifiche.
     - **Esegui Query con GPT-4o-mini**: interroga un database indicizzato utilizzando GPT-4o-mini.
+    - **Esegui Query con GPT-4o-mini**: interroga un database indicizzato utilizzando GPT-4o-mini con la tua key.
     """)
 
     # Disclaimer
@@ -112,13 +115,17 @@ def main():
         st.header("Rimuovi PDF da db")
         remove_pdfs_from_index()
 
-    elif pagina == "Esegui Query":
-        st.header("Esegui Query")
+    elif pagina == "Esegui Query con Ollama":
+        st.header("Esegui Query con Ollama")
         query_page()
 
     elif pagina == "Esegui Query con GPT-4o-mini":
         st.header("Esegui Query con GPT-4o-mini")
         query_pageg()
+        
+    elif pagina == "Esegui Query con GPT-40-mini con la tua Key":
+        st.header("Esegui Query con GPT-40-mini con la tua Key")
+        openk()
 
 if __name__ == "__main__":
     main()

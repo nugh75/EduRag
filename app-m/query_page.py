@@ -61,7 +61,7 @@ def query_page():
             model_name="phi3",
         )
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L12-v2"
+            model_name="sentence-transformers/all-mpnet-base-v2"
         )
 
         # Carica o crea l'indice FAISS con la cartella specificata
@@ -80,7 +80,35 @@ def query_page():
 
         # Configurazione del prompt
         prompt = ChatPromptTemplate.from_template(
-            "Sei un assistente preciso e attento; prima di tutto dai le definizioni o i termini più importati, poi nella spiegazione aiutati con degli esempi che possono essere tratti dalle tue conoscenze o inventati, se sono inventati da te specificalo. Rispondi a questa domanda in italiano: {question}, considera il seguente contesto {context}. Quando parli di contesto di \" secondo le mie conoscenze\" "
+           """
+            Sei un assistente preciso e attento. Rispondi alla seguente domanda in italiano: {question}. Usa il contesto fornito: {context}.
+            
+            Struttura la tua risposta scegliendo l'approccio più adatto in base al tipo di domanda:
+
+            - **Definizione di un concetto:**
+              - **Definizione chiara:** Inizia con una definizione precisa e concisa dei termini o concetti chiave.
+              - **Dettagli aggiuntivi:** Approfondisci con dettagli rilevanti che migliorano la comprensione del concetto.
+              - **Esempi:** Fornisci esempi concreti, specificando se sono inventati.
+
+            - **Confronto tra concetti:**
+              - **Introduzione ai concetti:** Presenta brevemente i due concetti principali coinvolti nel confronto.
+              - **Somiglianze e differenze:** Esplora le somiglianze e le differenze tra i concetti.
+              - **Esempi:** Usa esempi per chiarire i punti di confronto, specificando se sono inventati.
+
+            - **Argomentazioni su una domanda:**
+              - **Introduzione alla questione:** Fornisci una breve panoramica della domanda o del problema.
+              - **Argomentazione a favore:** Sviluppa argomenti a sostegno della domanda o tesi.
+              - **Argomentazione contro:** Presenta argomenti contrari o critici.
+              - **Esempi:** Illustra le argomentazioni con esempi specifici, indicando se sono inventati.
+
+            - **Possibili riflessioni su una domanda:**
+              - **Analisi critica:** Offri un'analisi critica della domanda, esplorando diverse prospettive.
+              - **Implicazioni:** Discuti le implicazioni della domanda nei diversi contesti.
+              - **Conclusione:** Concludi con una riflessione personale, collegando il tutto al contesto fornito.
+
+            Durante la tua risposta, integra sempre il contesto fornito ({context}) per arricchire e specificare le informazioni. Utilizza un linguaggio chiaro e formale, assicurandoti che la risposta sia coerente e ben strutturata.
+              Concludi sempre dicendo che sei un intelligenza artificiale e che le tue affermazioni devono essere sempre raffrontate con delle fonti affidabili. Inoltre, sempre alla fine cita la fonte delle tue affermazioni con testo da cui hai preso l'informazione e la pagina
+            """
         )
 
         rag_chain = build_rag_chain(prompt, model, retriever, document_map)
@@ -248,7 +276,7 @@ def add_interaction(domanda, risposta, temperatura, similarity_k, argomento, fon
             "risposta": risposta,
             "temperatura": temperatura,
             "chunk da recuperare": similarity_k,
-            "argomento": argomento,
+            "indice": argomento,
             "fonte": fonte,
         }
     )
@@ -258,7 +286,7 @@ def add_interaction(domanda, risposta, temperatura, similarity_k, argomento, fon
         "-----------------------------\n"
         f"Domanda: {domanda}\n"
         f"Risposta: {risposta}\n"
-        f"temperatura: {temperatura}, chunk da recuperare: {similarity_k}, Argomento: {argomento}\n"
+        f"temperatura: {temperatura}, chunk da recuperare: {similarity_k}, Indice: {argomento}\n"
         "-----------------------------\n"
         f"Fonte: {fonte}\n\n"
     )
@@ -269,7 +297,7 @@ def display_current_interaction(temperature, similarity_k, argomento, formatted_
     st.write("-----------------------------")
     st.write(f"**Domanda:** {st.session_state.interazioni[-1]['domanda']}")
     st.write(f"**Risposta:** {st.session_state.last_response}")
-    st.write(f"**temperatura:** {temperature} - **chunk da recuperare:** {similarity_k} - **Argomento:** {argomento}")
+    st.write(f"**temperatura:** {temperature} - **chunk da recuperare:** {similarity_k} - **Indice:** {argomento}")
     st.write("-----------------------------")
     st.write(f"**Fonte:** {formatted_context}")
 
@@ -281,7 +309,7 @@ def display_interaction_history():
         st.write("-----------------------------")
         st.write(f"**Domanda:** {interazione['domanda']}")
         st.write(f"**Risposta:** {interazione['risposta']}")
-        st.write(f"**temperatura:** {interazione['temperatura']} -  **chunk da recuperare:** {interazione['chunk da recuperare']} -  **Argomento:** {interazione['argomento']}")
+        st.write(f"**temperatura:** {interazione['temperatura']} -  **chunk da recuperare:** {interazione['chunk da recuperare']} -  **Indice:** {interazione['argomento']}")
         st.write("-----------------------------")
         st.write(f"**Fonte:** {interazione['fonte']}")
 
