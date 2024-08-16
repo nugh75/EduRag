@@ -9,9 +9,9 @@ from langchain_core.runnables import RunnablePassthrough
 from sidebar.sidebar_config import sidebar_c  # Import the sidebar configuration function
 from prompt.prompt_config import get_chat_prompt_template  # Importa il modulo del prompt
 from dotenv import load_dotenv
-from utils.anthropic_m import anthropic_m
-# Carica le variabili d'ambiente dal file .env
-load_dotenv()
+from utils.anthropic_m import anthropic_m 
+from utils.def_comuny import *
+
 
 # Define the main function
 def query_db_claude():
@@ -21,9 +21,9 @@ def query_db_claude():
     # Configure the user interface
     configure_ui()
 
-    anthropic_m()
+    claude_api_key = anthropic_m()  # Capture the API key returned by the function
     
-     # Sidebar configuration
+    # Sidebar configuration
     db_path = "app/db"
     temperature, similarity_k, Indice = sidebar_c(db_path, list_subfolders)
 
@@ -36,8 +36,8 @@ def query_db_claude():
     )
 
     if st.button("Invia"):
-        if not claude_api_key.startswith("sk-"):
-            st.warning("Per favore, inserisci una chiave API OpenAI valida!", icon="⚠")
+        if not claude_api_key:
+            st.warning("Per favore, inserisci una chiave API valida!", icon="⚠")
             return
 
         # Configuration settings
@@ -114,134 +114,7 @@ def query_db_claude():
             file_name="conversazione.txt",
             mime="text/plain",
         )
-
-def init_session_state():
-    """Initialize the session state."""
-    session_vars = [
-        "interazioni",
-        "conversazione",
-        "user_query",
-        "last_response",
-        "formatted_context",
-        "user_api_key",
-        "model_choice",
-    ]
-
-    for var in session_vars:
-        if var not in st.session_state:
-            st.session_state[var] = "" if var != "interazioni" else []
-
-def configure_ui():
-    """Configure user interface elements."""
-    st.write(
-        "Interagisci con gli LLMs di Antropic"
-    )
-
-
-def list_subfolders(db_path):
-    """Return a list of subfolders in the specified directory."""
-    try:
-        return [
-            name for name in os.listdir(db_path) if os.path.isdir(os.path.join(db_path, name))
-        ]
-    except FileNotFoundError:
-        st.error("La cartella 'db' non esiste. Assicurati che la struttura delle cartelle sia corretta.")
-        return []
-
-
-def get_faiss_index(cartella, embeddings, splits=None):
-    """Load or create the FAISS index."""
-    index_path = os.path.join(cartella, "index.faiss")
-    if os.path.exists(cartella) and os.path.exists(index_path):
-        try:
-            return FAISS.load_local(cartella, embeddings, allow_dangerous_deserialization=True)
-        except Exception as e:
-            st.error(f"Errore durante il caricamento dell'indice FAISS: {e}")
-            return None
-    elif splits is not None:
-        faiss_index = FAISS.from_documents(splits, embeddings)
-        faiss_index.save_local(cartella)
-        return faiss_index
-    else:
-        st.error("Non ci sono dati disponibili per creare l'indice FAISS.")
-        return None
-
-
-def build_rag_chain(prompt, model, retriever):
-    """Create the RAG chain to execute the query."""
-    return {
-        "context": retriever,
-        "question": RunnablePassthrough(),
-    } | prompt | model | StrOutputParser()
-
-
-def format_documents(all_documents):
-    """Format retrieved documents for output."""
-    formatted_docs = []
-    for doc in all_documents:
-        source = doc.metadata.get("title", "Sconosciuto")
-        page = doc.metadata.get("page_number", "Sconosciuta")
-
-        # Add relevant sections
-        formatted_docs.append(
-            f"Fonte: {source}, Pagina: {page}\n\n...{doc.page_content}..."
-        )
-    return "\n\n---------------------------\n\n".join(formatted_docs)
-
-
-def query_stream(query, rag_chain):
-    """Execute the query and return the response as a stream."""
-    response = ""
-    for chunk in rag_chain.stream(query):
-        response += chunk
-    return response
-
-
-def add_interaction(domanda, risposta, temperatura, similarity_k, Indice, fonte):
-    """Add an interaction to the list of interactions."""
-    st.session_state.interazioni.append(
-        {
-            "domanda": domanda,
-            "risposta": risposta,
-            "temperatura": temperatura,
-            "chunk da recuperare": similarity_k,
-            "Indice": Indice,
-            "fonte": fonte,
-        }
-    )
-
-    # Update the conversation variable
-    st.session_state.conversazione += (
-        "-----------------------------\n"
-        f"Domanda: {domanda}\n"
-        f"Risposta: {risposta}\n"
-        f"temperatura: {temperatura}, chunk da recuperare: {similarity_k}, Indice: {Indice}\n"
-        "-----------------------------\n"
-        f"Fonte: {fonte}\n\n"
-    )
-
-
-def display_current_interaction(temperature, similarity_k, Indice, formatted_context):
-    """Display the current question and answer."""
-    st.write("-----------------------------")
-    st.write(f"**Domanda:** {st.session_state.interazioni[-1]['domanda']}")
-    st.write(f"**Risposta:** {st.session_state.last_response}")
-    st.write(f"**temperatura:** {temperature} - **chunk da recuperare:** {similarity_k} - **Indice:** {Indice}")
-    st.write("-----------------------------")
-    st.write(f"**Fonte:** {formatted_context}")
-
-
-def display_interaction_history():
-    """Display the interaction history."""
-    st.write("### Storico delle conversazioni")
-    for interazione in st.session_state.interazioni:
-        st.write("-----------------------------")
-        st.write(f"**Domanda:** {interazione['domanda']}")
-        st.write(f"**Risposta:** {interazione['risposta']}")
-        st.write(f"**temperatura:** {interazione['temperatura']} -  **chunk da recuperare:** {interazione['chunk da recuperare']} -  **Indice:** {interazione['Indice']}")
-        st.write("-----------------------------")
-        st.write(f"**Fonte:** {interazione['fonte']}")
-
+comuni()
 
 if __name__ == "__main__":
     query_db_claude()
