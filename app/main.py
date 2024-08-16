@@ -9,6 +9,9 @@ from query_database.query_claude import query_db_claude
 from tool.pdf_summary import pdf_summary
 from tool.savickas_interview import savickas_interview
 from tool.open_question import open_question
+from mostra_indici import mostra_indici_disponibili
+
+
 
 
 def display_main_menu():
@@ -33,13 +36,15 @@ def display_sub_menu(selected_page):
     if selected_page == "Amministrazione":
         sub_page_options = ["Gestione Indici", "Crea Database", "Elimina File"]
         sub_page = st.sidebar.selectbox("Seleziona una funzione:", sub_page_options)
+        
+        mostra_indici_disponibili()
 
     elif selected_page == "Interrogazione db indicizzato":
-        sub_page_options = ["Openai","Antropic"]
+        sub_page_options = ["Openai","Anthropic"]
         sub_page = st.sidebar.selectbox("Seleziona:", sub_page_options)
 
     elif selected_page == "Tool":
-        sub_page_options = ["Riassunto PDF", "Savickas intervista", "Domande aperte"]
+        sub_page_options = ["Riassunto PDF", "Intervista Savickas", "Domande aperte"]
         sub_page = st.sidebar.selectbox("Seleziona un tool:", sub_page_options)
 
     return sub_page
@@ -72,12 +77,12 @@ def mostra_interrogazione_db():
     # Mostra solo la funzione corretta per la sottopagina selezionata
     if selected_subpage == "Openai":
         query_db_gpt4()
-    elif selected_subpage == "Antropic":
+    elif selected_subpage == "Anthropic":
         query_db_claude()
 
 def mostra_tool():
     st.title("Tool")
-    st.write("Funzioni di supporto.")
+    #st.write("Funzioni di supporto.")
 
     # Mostra il sottomenu per le operazioni di Tool
     selected_subpage = display_sub_menu("Tool")
@@ -85,7 +90,7 @@ def mostra_tool():
     # Mostra solo la funzione corretta per la sottopagina selezionata
     if selected_subpage == "Riassunto PDF":
         pdf_summary()
-    elif selected_subpage == "Savickas intervista":
+    elif selected_subpage == "Intervista Savickas":
         savickas_interview()
     elif selected_subpage == "Domande aperte":
         open_question()
@@ -101,12 +106,14 @@ def main():
     # Execute main page function
     if selected_page == "Home":
         mostra_home()
+        mostra_indici_disponibili()
     elif selected_page == "Amministrazione":
         mostra_amministrazione()
     elif selected_page == "Interrogazione db indicizzato":
         mostra_interrogazione_db()
     elif selected_page == "Tool":
         mostra_tool()
+        
 
 if __name__ == "__main__":
     main()

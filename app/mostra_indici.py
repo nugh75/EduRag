@@ -2,11 +2,11 @@
 
 import os
 import streamlit as st
-from utils.utils import leggi_descrizioni_e_documenti
+from utils.utils import read_descriptions_and_documents
 
 def mostra_indici_disponibili():
     # Percorso della cartella dove sono salvati gli indici FAISS
-    faiss_index_folder = "db"
+    faiss_index_folder = "app/db"
 
     # Controllo se la cartella degli indici esiste
     if not os.path.exists(faiss_index_folder):
@@ -15,7 +15,7 @@ def mostra_indici_disponibili():
 
     try:
         # Ottieni le informazioni sugli indici esistenti
-        indici_info = leggi_descrizioni_e_documenti(faiss_index_folder)
+        indici_info = read_descriptions_and_documents(faiss_index_folder)
     except Exception as e:
         st.sidebar.error("Errore durante la lettura degli indici.")
         return
@@ -26,6 +26,8 @@ def mostra_indici_disponibili():
 
     # Elenco dei nomi degli indici
     indice_nomi = [indice["nome"] for indice in indici_info]
+    
+    st.sidebar.title("Db indicizzati")
 
     # Aggiungi un menu a tendina per selezionare un indice
     selected_index_name = st.sidebar.selectbox(

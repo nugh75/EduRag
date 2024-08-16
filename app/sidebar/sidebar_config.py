@@ -35,6 +35,6 @@ def sidebar_c(db_path, list_subfolders):
         return None, None
 
     # Topic selection (Note: st.selectbox returns the selected value, not the index)
-    Indice = st.sidebar.selectbox("Seleziona l'indice", subfolders)
+    Indice = st.selectbox("Seleziona il db indicizzato", subfolders)
 
     return temperature, similarity_k, Indice

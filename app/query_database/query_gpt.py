@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnablePassthrough
 from sidebar.sidebar_config import sidebar_c  # Import the sidebar configuration function
 from prompt.prompt_config import get_chat_prompt_template  # Importa il modulo del prompt
 from dotenv import load_dotenv
+from utils.openai import openai_m
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
@@ -19,22 +20,25 @@ def query_db_gpt4():
 
     # Configure the user interface
     configure_ui()
+    
+    openai_m()
 
-    # Sidebar configuration
+   
+    # # Aggiunta delle opzioni per selezionare il modello LLM e inserire la chiave API
+    # api_choice = st.sidebar.selectbox("Scegli la chiave API da usare", ["Usa chiave di sistema", "Inserisci la tua chiave API"], index=1)
+    
+    # if api_choice == "Inserisci la tua chiave API":
+    #     openai_api_key = st.sidebar.text_input("Inserisci la tua chiave API OpenAI", st.session_state.get("user_api_key", ""), type="password")
+    #     st.session_state.user_api_key = openai_api_key  # Salva la chiave API inserita dall'utente
+    # else:
+    #     openai_api_key = os.getenv("OPENAI_API_KEY")
+
+    # model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=1)
+    # st.session_state.model_choice = model_choice  # Salva la scelta del modello
+    
+     # Sidebar configuration
     db_path = "app/db"
     temperature, similarity_k, Indice = sidebar_c(db_path, list_subfolders)
-
-    # Aggiunta delle opzioni per selezionare il modello LLM e inserire la chiave API
-    api_choice = st.sidebar.selectbox("Scegli la chiave API da usare", ["Usa chiave di sistema", "Inserisci la tua chiave API"], index=0)
-    
-    if api_choice == "Inserisci la tua chiave API":
-        openai_api_key = st.sidebar.text_input("Inserisci la tua chiave API OpenAI", st.session_state.get("user_api_key", ""), type="password")
-        st.session_state.user_api_key = openai_api_key  # Salva la chiave API inserita dall'utente
-    else:
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-
-    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=1)
-    st.session_state.model_choice = model_choice  # Salva la scelta del modello
 
     if Indice is None:
         return  # Early return if there was an error with the subfolders

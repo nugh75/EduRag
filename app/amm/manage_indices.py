@@ -33,16 +33,16 @@ def view_and_manage_db():
         return
 
     # Mostra gli indici disponibili
-    st.write("#### Indice")
+    st.write("#### db indicizzato")
     indice_nomi = [indice['nome'] for indice in indici_info]
     selected_index = st.selectbox("Seleziona:", indice_nomi, key='selected_index')
 
-    logging.info(f"Indice selezionato: {selected_index}")
+    logging.info(f"db indicizzato selezionato: {selected_index}")
 
     # Mostra i dettagli dell'indice selezionato
     selected_info = next((indice for indice in indici_info if indice["nome"] == selected_index), None)
     if selected_info:
-        #st.write(f"**Indice selezionato:** {selected_info['nome']}")
+        #st.write(f"**db indicizzato selezionato:** {selected_info['nome']}")
         st.write(f"**Descrizione:** \n\n {selected_info['descrizione']}\n")
         st.write("**Documenti:**")
         for doc in selected_info['documenti']:
@@ -50,9 +50,9 @@ def view_and_manage_db():
 
     # Funzione per rinominare l'indice selezionato
     st.write("---------")
-    st.write("#### Rinomina Indice")
+    st.write("#### Rinomina db indicizzato")
     new_index_name = st.text_input("Inserisci un nuovo nome per l'indice:", key='new_index_name')
-    if st.button("Rinomina Indice"):
+    if st.button("Rinomina db indicizzato"):
         if new_index_name:
             if new_index_name in indice_nomi:
                 st.error("Esiste già un indice con questo nome. Scegli un altro nome.")
@@ -64,8 +64,8 @@ def view_and_manage_db():
                     new_path = os.path.join(faiss_index_folder, new_index_name)
                     logging.info(f"Tentativo di rinominare la directory da {old_path} a {new_path}")
                     os.rename(old_path, new_path)
-                    st.success(f"Indice '{selected_index}' rinominato in '{new_index_name}'.")
-                    logging.info(f"Indice '{selected_index}' rinominato in '{new_index_name}' con successo.")
+                    st.success(f"db indicizzato '{selected_index}' rinominato in '{new_index_name}'.")
+                    logging.info(f"db indicizzato '{selected_index}' rinominato in '{new_index_name}' con successo.")
                     # Trigger page refresh
                     try:
                         st.experimental_rerun()
@@ -81,9 +81,9 @@ def view_and_manage_db():
 
     # Funzione per cancellare l'indice selezionato
     st.write("---------")
-    st.write("#### Cancella Indice")
-    if st.checkbox(f"Conferma la cancellazione dell'indice '{selected_index}'"):
-        if st.button("Cancella Indice"):
+    st.write("#### Cancella db indicizzato")
+    if st.checkbox(f"Conferma la cancellazione del db indicizzato' {selected_index}'"):
+        if st.button("Cancella db indicizzato"):
             index_path = os.path.join(faiss_index_folder, selected_index)
             logging.info(f"Tentativo di cancellazione dell'indice: {selected_index} nel percorso {index_path}")
             if os.path.exists(index_path):
@@ -92,8 +92,8 @@ def view_and_manage_db():
                     shutil.rmtree(index_path)
                     logging.info(f"shutil.rmtree eseguito per: {index_path}")
                     if not os.path.exists(index_path):  # Verifica che la directory sia stata effettivamente rimossa
-                        st.success(f"Indice '{selected_index}' cancellato con successo.")
-                        logging.info(f"Indice '{selected_index}' cancellato con successo.")
+                        st.success(f"db indicizzato '{selected_index}' cancellato con successo.")
+                        logging.info(f"db indicizzato '{selected_index}' cancellato con successo.")
                         # Trigger page refresh
                         try:
                             st.experimental_rerun()

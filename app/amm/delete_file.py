@@ -13,22 +13,22 @@ def delete_file_from_database():
     # Percorso della cartella dove sono salvati gli indici FAISS
     faiss_index_folder = "app/db"
 
-    # Controllo se la cartella degli indici esiste
+    # Controllo se la cartella dei db indicizzati non esiste
     if not os.path.exists(faiss_index_folder):
-        st.error("La cartella degli indici non esiste. Crea prima un indice.")
+        st.error("La cartella dei db indicizzati non esiste. Crea prima un indice.")
         return
 
     # Ottieni la lista degli indici esistenti
     indexes = os.listdir(faiss_index_folder)
 
     if not indexes:
-        st.error("Non ci sono indici disponibili.")
+        st.error("Non ci sono db indicizzati disponibili.")
         return
 
     # Seleziona un indice esistente
-    selected_index = st.selectbox("Seleziona un indice esistente:", indexes)
+    selected_index = st.selectbox("Seleziona un db indicizzato esistente:", indexes)
 
-    # Percorso dell'indice selezionato
+    # Percorso del db indicizzato selezionato
     index_path = os.path.join(faiss_index_folder, selected_index)
 
     # Carica l'indice FAISS
@@ -36,7 +36,7 @@ def delete_file_from_database():
     try:
         index = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
     except Exception as e:
-        st.error(f"Errore durante il caricamento dell'indice: {str(e)}")
+        st.error(f"Errore durante il caricamento del db indicizzato: {str(e)}")
         return
 
     # Leggi il file di descrizione per ottenere i titoli dei PDF
@@ -87,4 +87,4 @@ def delete_file_from_database():
                 if not any(pdf in line for pdf in selected_pdfs):
                     desc_file.write(line)
 
-        st.success(f"PDF e chunk associati rimossi con successo dall'indice '{selected_index}'.")
+        st.success(f"PDF e chunk associati rimossi con successo dal db indicizzato'{selected_index}'.")

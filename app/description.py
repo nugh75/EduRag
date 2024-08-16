@@ -1,5 +1,6 @@
 # description.py
 
+
 def get_description():
     """
     Returns the description of the application.
