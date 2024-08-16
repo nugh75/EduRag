@@ -124,7 +124,7 @@ def create_database():
         )
 
         # Cartella per l'indice FAISS è fissata a 'db/<nome_sotto_cartella>'
-        faiss_index_folder = os.path.join("db", subfolder_name)
+        faiss_index_folder = os.path.join("app/db", subfolder_name)
 
         # Verifica se il database esiste già
         if not subfolder_name:

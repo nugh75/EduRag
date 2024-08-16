@@ -12,9 +12,6 @@ from dotenv import load_dotenv
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
-# Ottieni la chiave API da una variabile d'ambiente
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
 def savickas_interview():
     # Initialize session state
     init_session_state()
@@ -22,8 +19,20 @@ def savickas_interview():
     # Configure the user interface
     configure_ui()
 
+    # Sidebar configuration for API key and model selection
+    api_choice = st.sidebar.selectbox("Scegli la chiave API da usare", ["Usa chiave di sistema", "Inserisci la tua chiave API"], index=0)
+
+    if api_choice == "Inserisci la tua chiave API":
+        openai_api_key = st.sidebar.text_input("Inserisci la tua chiave API OpenAI", st.session_state.get("user_api_key", ""), type="password")
+        st.session_state.user_api_key = openai_api_key  # Salva la chiave API inserita dall'utente
+    else:
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+
+    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=1)
+    st.session_state.model_choice = model_choice  # Salva la scelta del modello
+
     # Temperature slider
-    temperature = st.slider(
+    temperature = st.sidebar.slider(
         "Temperatura",
         0.0,
         1.0,
@@ -32,7 +41,7 @@ def savickas_interview():
     )
 
     # Slider for the number of chunks to retrieve
-    similarity_k = st.slider(
+    similarity_k = st.sidebar.slider(
         "chunk da recuperare",
         1,
         15,
@@ -42,22 +51,22 @@ def savickas_interview():
 
     # Creazione del contenitore per le domande di career counseling di Mark Savickas
     with st.container():
-        st.header("Career Counseling con Mark Savickas")
+        st.write("### Career Counseling con Mark Savickas")
 
         # Prima domanda: Role Models
-        question1 = st.text_area("1. Chi sono stati i tuoi modelli di ruolo? Spiega cosa ti ha colpito di loro.")
+        question1 = st.text_area("**1. Chi sono stati i tuoi modelli di ruolo? Spiega cosa ti ha colpito di loro.**")
 
         # Seconda domanda: Magazines/Television Shows
-        question2 = st.text_area("2. Quali sono le tue riviste o programmi televisivi preferiti? Perché?")
+        question2 = st.text_area("**2. Quali sono le tue riviste o programmi televisivi preferiti? Perché?**")
 
         # Terza domanda: Favorite Story
-        question3 = st.text_area("3. Qual è la tua storia o libro preferito? Perché?")
+        question3 = st.text_area("**3. Qual è la tua storia o libro preferito? Perché?**")
 
         # Quarta domanda: Favorite Saying
-        question4 = st.text_area("4. Qual è il tuo motto preferito o una frase che ti rappresenta?")
+        question4 = st.text_area("**4. Qual è il tuo motto preferito o una frase che ti rappresenta?**")
 
         # Quinta domanda: Early Memories
-        question5 = st.text_area("5. Racconta un ricordo d'infanzia significativo.")
+        question5 = st.text_area("**5. Racconta un ricordo d'infanzia significativo.**")
 
         # Concatenate all questions to form the user query
         st.session_state.user_query = (
@@ -69,7 +78,7 @@ def savickas_interview():
         )
 
     # Retrieve subfolders from the 'db' directory
-    db_path = "db"
+    db_path = "app/db"
     subfolders = list_subfolders(db_path)
 
     if not subfolders:
@@ -78,8 +87,7 @@ def savickas_interview():
         )
         return
 
-    # Topic selection (Note: st.selectbox returns the selected value, not the index)
-    Indice = st.selectbox("Seleziona l'indice", subfolders)
+    Indice = "app/db/Career Counseling"
 
     if st.button("Invia"):
         if not openai_api_key.startswith("sk-"):
@@ -87,7 +95,7 @@ def savickas_interview():
             return
 
         # Configuration settings
-        model = ChatOpenAI(temperature=temperature, model_name="gpt-4o", api_key=openai_api_key)
+        model = ChatOpenAI(temperature=temperature, model_name=st.session_state.model_choice, api_key=openai_api_key)
         embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L12-v2')
 
         # Load or create the FAISS index with the specified folder
@@ -163,6 +171,8 @@ def init_session_state():
         "user_query",
         "last_response",
         "formatted_context",
+        "user_api_key",
+        "model_choice",
     ]
 
     for var in session_vars:
@@ -172,7 +182,7 @@ def init_session_state():
 def configure_ui():
     """Configure user interface elements."""
     st.write(
-        "Interagisci con GPT di Openais"
+        "Interagisci con il modello di linguaggio GPT per l'intervista di career counseling."
     )
 
 def list_subfolders(db_path):

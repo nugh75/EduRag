@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def view_and_manage_db():
     # Percorso della cartella dove sono salvati gli indici FAISS
-    faiss_index_folder = "db"
+    faiss_index_folder = "app/db"
 
     # Controllo se la cartella degli indici esiste
     if not os.path.exists(faiss_index_folder):

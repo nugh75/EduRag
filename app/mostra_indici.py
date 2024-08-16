@@ -2,7 +2,7 @@
 
 import os
 import streamlit as st
-from app5.utils.utils import leggi_descrizioni_e_documenti
+from utils.utils import leggi_descrizioni_e_documenti
 
 def mostra_indici_disponibili():
     # Percorso della cartella dove sono salvati gli indici FAISS

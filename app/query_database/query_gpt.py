@@ -6,69 +6,51 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.runnables import RunnablePassthrough
+from sidebar.sidebar_config import sidebar_c  # Import the sidebar configuration function
 from prompt.prompt_config import get_chat_prompt_template  # Importa il modulo del prompt
 from dotenv import load_dotenv
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
-# Ottieni la chiave API da una variabile d'ambiente
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
 # Define the main function
-def query_db_gpt4_mini():
+def query_db_gpt4():
     # Initialize session state
     init_session_state()
 
     # Configure the user interface
     configure_ui()
 
-    # Input for API Key in the main interface
-    #openai_api_key = st.text_input("Inserisci la tua chiave API OpenAI", type="password")
+    # Sidebar configuration
+    db_path = "app/db"
+    temperature, similarity_k, Indice = sidebar_c(db_path, list_subfolders)
 
-    # Temperature slider
-    temperature = st.slider(
-        "Temperatura",
-        0.0,
-        1.0,
-        0.2,
-        help="La temperatura nei modelli di linguaggio (LLM) regola la casualità delle risposte generate: valori bassi (vicini a 0) rendono le risposte più deterministiche e ripetitive, mentre valori più alti introducono maggiore variabilità e creatività. Un'alta temperatura consente al modello di esplorare una gamma più ampia di opzioni, generando risposte più diverse e meno prevedibili.",
-    )
+    # Aggiunta delle opzioni per selezionare il modello LLM e inserire la chiave API
+    api_choice = st.sidebar.selectbox("Scegli la chiave API da usare", ["Usa chiave di sistema", "Inserisci la tua chiave API"], index=0)
+    
+    if api_choice == "Inserisci la tua chiave API":
+        openai_api_key = st.sidebar.text_input("Inserisci la tua chiave API OpenAI", st.session_state.get("user_api_key", ""), type="password")
+        st.session_state.user_api_key = openai_api_key  # Salva la chiave API inserita dall'utente
+    else:
+        openai_api_key = os.getenv("OPENAI_API_KEY")
 
-    # Slider for the number of chunks to retrieve
-    similarity_k = st.slider(
-        "chunk da recuperare",
-        1,
-        15,
-        4,
-        help="Nel contesto del Recupero delle Informazioni con i Grandi Modelli di Linguaggio (RAG), i chunk sono segmenti di testo suddivisi da documenti più grandi. Questa suddivisione ottimizza l'elaborazione del modello, mantiene il contesto semantico e migliora la precisione del recupero delle informazioni rilevanti per una query specifica.",
-    )
+    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=1)
+    st.session_state.model_choice = model_choice  # Salva la scelta del modello
+
+    if Indice is None:
+        return  # Early return if there was an error with the subfolders
 
     # User query input
-    st.session_state.user_query = st.text_input(
+    st.session_state.user_query = st.text_area(
         "Inserisci la tua domanda", st.session_state.user_query
     )
-    
-    # Retrieve subfolders from the 'db' directory
-    db_path = "db"
-    subfolders = list_subfolders(db_path)
 
-    if not subfolders:
-        st.error(
-            "Nessuna sotto-cartella trovata nella cartella 'db'. Assicurati che ci siano dati disponibili per la ricerca."
-        )
-        return
-
-    # Topic selection (Note: st.selectbox returns the selected value, not the index)
-    Indice = st.selectbox("Seleziona l'indice", subfolders)
-
-    
     if st.button("Invia"):
         if not openai_api_key.startswith("sk-"):
             st.warning("Per favore, inserisci una chiave API OpenAI valida!", icon="⚠")
             return
 
         # Configuration settings
-        model = ChatOpenAI(temperature=temperature, model_name="gpt-4o-mini", api_key=openai_api_key)
+        model = ChatOpenAI(temperature=temperature, model_name=st.session_state.model_choice, api_key=openai_api_key)
         embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L12-v2')
 
         # Load or create the FAISS index with the specified folder
@@ -120,6 +102,12 @@ def query_db_gpt4_mini():
             temperature, similarity_k, Indice, st.session_state.formatted_context
         )
 
+    # Pulsante per resettare la visualizzazione corrente mantenendo i parametri nella sidebar
+    if st.button("Resetta e fai una nuova domanda"):
+        st.session_state.user_query = ""
+        st.session_state.last_response = ""
+        st.session_state.formatted_context = ""
+
     # Toggle to show/hide conversation history
     mostra_storico = st.checkbox("Mostra storico delle conversazioni", value=False)
 
@@ -144,17 +132,18 @@ def init_session_state():
         "user_query",
         "last_response",
         "formatted_context",
+        "user_api_key",
+        "model_choice",
     ]
 
     for var in session_vars:
         if var not in st.session_state:
             st.session_state[var] = "" if var != "interazioni" else []
 
-
 def configure_ui():
     """Configure user interface elements."""
     st.write(
-        "Interagisci con GPT di Openais"
+        "Interagisci con gli LLM di Openai"
     )
 
 
@@ -264,4 +253,4 @@ def display_interaction_history():
 
 
 if __name__ == "__main__":
-    query_db_gpt4_mini()
+    query_db_gpt4()
