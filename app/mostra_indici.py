@@ -27,6 +27,8 @@ def mostra_indici_disponibili():
     # Elenco dei nomi degli indici
     indice_nomi = [indice["nome"] for indice in indici_info]
     
+    st.sidebar.markdown("---")
+    
     st.sidebar.title("Db indicizzati")
 
     # Aggiungi un menu a tendina per selezionare un indice
