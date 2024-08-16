@@ -8,7 +8,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.docstore.document import Document
-import pdfplumber
+#import pdfplumber
 from PyPDF2 import PdfReader
 from PyPDF2.errors import PdfReadError
 from pdfminer.high_level import extract_text
