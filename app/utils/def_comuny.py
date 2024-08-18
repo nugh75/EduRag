@@ -152,6 +152,24 @@ def display_interaction_history():
         st.write(f"**temperatura:** {interazione['temperatura']} -  **chunk da recuperare:** {interazione['chunk da recuperare']} -  **Indice:** {interazione['Indice']}")
         st.write("-----------------------------")
         st.write(f"**Fonte:** {interazione['fonte']}")
+        
+def audio():
+    import tempfile
+    import edge_tts
+    import asyncio
+    import os
+
+    # Asynchronous function to convert text to speech
+    async def text_to_speech_edge_async(text, voice="it-IT-IsabellaNeural"):
+        communicate = edge_tts.Communicate(text, voice)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+            tmp_path = tmp_file.name
+            await communicate.save(tmp_path)
+        return tmp_path
+
+    # Function to run the asynchronous TTS function
+    def text_to_speech_edge(text, voice="it-IT-IsabellaNeural"):
+        return asyncio.run(text_to_speech_edge_async(text, voice))
 
 
 def comuni():
