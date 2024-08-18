@@ -15,7 +15,7 @@ def anthropic_m():
         # Get the API key from an environment variable
         claude_api_key = os.getenv("ANTHROPIC_API_KEY")
     
-    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["none", "claude-3-5-sonnet-20240620"], index=1)
+    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["claude-3-sonnet-20240229", "claude-3-5-sonnet-20240620"], index=1)
     st.session_state.model_choice = model_choice  # Salva la scelta del modello
     
     return claude_api_key  # Return the API key

@@ -8,7 +8,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.runnables import RunnablePassthrough
 from sidebar.sidebar_config import sidebar_c  # Import the sidebar configuration function
 from prompt.prompt_config import get_chat_prompt_template  # Importa il modulo del prompt
-from utils.openai import openai_m
+from utils.openai_m import openai_m
 
 
 def init_session_state():
