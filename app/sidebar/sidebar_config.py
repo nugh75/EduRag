@@ -20,7 +20,7 @@ def sidebar_c(db_path, list_subfolders):
     similarity_k = st.sidebar.slider(
         "chunk da recuperare",
         1,
-        50,
+        100,
         4,
         help="Nel contesto del Retrieval-Augmented Generation (RAG), i chunk sono segmenti di testo suddivisi da documenti più grandi. Questa suddivisione ottimizza l'elaborazione del modello, mantiene il contesto semantico e migliora la precisione del recupero delle informazioni rilevanti per una query specifica.",
     )
