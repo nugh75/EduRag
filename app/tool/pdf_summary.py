@@ -1,13 +1,17 @@
 import os
 import logging
 from io import BytesIO
-from dotenv import load_dotenv
 import streamlit as st
 import PyPDF2
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from docx import Document
 import zipfile
+import edge_tts
+import tempfile
+import asyncio
+import re
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,8 +20,66 @@ logger = logging.getLogger()
 # Load environment variables
 load_dotenv()
 
-# Get the OpenAI API key from an environment variable
-openai_api_key = os.getenv("OPENAI_API_KEY")
+language_dict = {
+    "Italian": {
+        "Isabella": "it-IT-IsabellaNeural",
+        "Diego": "it-IT-DiegoNeural",
+        "Elsa": "it-IT-ElsaNeural"
+    },
+    "English": {
+        "Jenny": "en-US-JennyNeural",
+        "Guy": "en-US-GuyNeural",
+        "Aria": "en-US-AriaNeural"
+    },
+    "Swedish": {
+        "Sofie": "sv-SE-SofieNeural",
+        "Mattias": "sv-SE-MattiasNeural"
+    }
+}
+
+async def text_to_speech_edge_async(text, language_code, speaker):
+    voice = language_dict[language_code][speaker]
+    communicate = edge_tts.Communicate(text, voice)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+        tmp_path = tmp_file.name
+        await communicate.save(tmp_path)
+    return tmp_path
+
+def text_to_speech_edge(text, language_code, speaker):
+    return asyncio.run(text_to_speech_edge_async(text, language_code, speaker))
+
+def openai_m():
+    # Aggiunta delle opzioni per selezionare il modello LLM e inserire la chiave API
+    api_choice = st.sidebar.selectbox("Scegli la chiave API da usare", ["Usa chiave di sistema", "Inserisci la tua chiave API"], index=1)
+    
+    if api_choice == "Inserisci la tua chiave API":
+        openai_api_key = st.sidebar.text_input("Inserisci la tua chiave API OpenAI", st.session_state.get("user_api_key", ""), type="password")
+        st.session_state.user_api_key = openai_api_key  # Salva la chiave API inserita dall'utente
+    else:
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+    
+    # Controlla se la chiave API è stata impostata
+    if not openai_api_key:
+        st.error("Errore: La chiave API non è stata inserita o non è configurata correttamente.")
+        return None, None, None  # Restituisci valori None per evitare il crash
+
+    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=1)
+    st.session_state.model_choice = model_choice  # Salva la scelta del modello
+    
+    # Aggiunta dello slider per la temperatura
+    temperature = st.sidebar.slider("Imposta la temperatura del modello", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
+    st.session_state.temperature = temperature  # Salva la temperatura scelta
+
+    # Slider per selezionare la lingua del riassunto
+    summary_language = st.sidebar.selectbox("Seleziona la lingua per il riassunto", ["Italian", "English", "Swedish"])
+    
+    # Slider per selezionare la lingua dell'audio
+    audio_language = st.sidebar.selectbox("Seleziona la lingua per l'audio", ["Italian", "English", "Swedish"])
+    
+    # Slider per selezionare la voce dell'audio
+    speaker = st.sidebar.selectbox("Seleziona la voce per l'audio", list(language_dict[audio_language].keys()))
+
+    return openai_api_key, model_choice, temperature, summary_language, audio_language, speaker
 
 def extract_text_from_pdf(reader):
     text = ""
@@ -27,34 +89,34 @@ def extract_text_from_pdf(reader):
 
 def split_text_into_chunks(text, num_chunks):
     chunk_size = len(text) // num_chunks
-    overlap = chunk_size // 3  # 3% overlap
-    logger.info(f"Splitting text into {num_chunks} chunks of approx. {chunk_size} characters with an overlap of {overlap} characters.")
-    
     chunks = []
     start = 0
-    while start < len(text):
+    
+    for i in range(num_chunks):
         end = start + chunk_size
+        if i == num_chunks - 1:  # L'ultimo chunk prende tutto il testo rimanente
+            end = len(text)
         chunk = text[start:end].strip()
         chunks.append(chunk)
-        start = end - overlap
+        start = end
+        logger.info(f"Chunk {i+1}: {chunk[:100]}...")  # Mostra l'inizio di ciascun chunk per verifica
     
-    logger.info(f"Created {len(chunks)} chunks.")
     return chunks
 
-def summarize_text_with_context(text, prev_chunk, next_chunk, language="Italian"):
-    logger.info("Starting text summarization with context.")
+def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language="Italian"):
+    logger.info(f"Starting text summarization with context in {language}.")
     
-    # Set up the chat model with the specific model and API key
+    # Set up the chat model with the specific model, temperature, and API key
     llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0,
+        model=model_choice,
+        temperature=temperature,
         openai_api_key=openai_api_key
     )
     
     # Create a chat prompt template with context from previous and next chunks
     template = ChatPromptTemplate.from_messages([
-        ("system", """
-        Sei un assistente AI specializzato nel riassumere testi in italiano. Il tuo compito è creare un riassunto conciso, fluido e coeso del testo fornito.
+        ("system", f"""
+        Sei un assistente AI specializzato nel riassumere testi in {language}. Il tuo compito è creare un riassunto conciso, fluido e coeso del testo fornito.
 
         Per creare il riassunto, segui queste linee guida:
 
@@ -65,11 +127,9 @@ def summarize_text_with_context(text, prev_chunk, next_chunk, language="Italian"
         5. Mantieni un tono neutro e oggettivo, usa uno stile accademico.
         6. Il riassunto dovrebbe essere significativamente più breve del testo originale: non più di un quarto della lunghezza originale.
         7. Metti in evidenza definizioni ed esempi.
-       
-                
-        8. Prendi in considerazione anche il contesto precedente e successivo per mantenere la continuità:
-        - Testo precedente: {previous_chunk}
-        - Testo successivo: {next_chunk}
+        8. Considera il contesto fornito dai blocchi precedente e successivo per garantire continuità e coerenza.
+        - Testo precedente: {{previous_chunk}}
+        - Testo successivo: {{next_chunk}}
         """),
         ("human", "{input}")
     ])
@@ -82,7 +142,43 @@ def summarize_text_with_context(text, prev_chunk, next_chunk, language="Italian"
         "input": text
     })
     
-    logger.info("Text summarization with context completed.")
+    logger.info(f"Text summarization with context in {language} completed.")
+    return response.content
+
+def enhance_text_with_headings(summarized_text, model_choice, temperature, openai_api_key, language="Italian"):
+    logger.info(f"Starting text enhancement with headings in {language}.")
+    
+    # Set up the chat model with the specific model, temperature, and API key
+    llm = ChatOpenAI(
+        model=model_choice,
+        temperature=temperature,
+        openai_api_key=openai_api_key
+    )
+    
+    # Create a chat prompt template to improve the text and add headings
+    template = ChatPromptTemplate.from_messages([
+        ("system", f"""
+        Sei un assistente AI specializzato nel migliorare testi riassunti e aggiungere titoletti appropriati in {language}. Il tuo compito è rivedere il testo fornito, migliorarlo e inserire titoletti che riflettano il contenuto di ciascuna sezione.
+
+        Per migliorare il testo, segui queste linee guida:
+
+        1. Leggi attentamente il testo riassunto.
+        2. Identifica le sezioni principali e aggiungi titoli e sottotitoli descrittivi.
+        3. Assicurati che il testo sia fluido, coeso e ben organizzato.
+        4. Mantieni un tono neutro e oggettivo, usa uno stile accademico.
+        5. Metti in **grassetto** le definizioni.
+        6. Metti in *corsivo* gli esempi.
+        """),
+        ("human", "{input}")
+    ])
+    
+    # Format the prompt with the specific input
+    chain = template.pipe(llm)
+    response = chain.invoke({
+        "input": summarized_text
+    })
+    
+    logger.info(f"Text enhancement with headings in {language} completed.")
     return response.content
 
 def create_docx(text):
@@ -116,7 +212,7 @@ def create_zip_file(txt_data, docx_data, pdf_filename):
     return zip_buffer
 
 def pdf_summary():
-    st.write("### Strumento per Riassumere ed Esportare PDF")
+    st.write("### Strumento per Riassumere ed Esportare PDF e Audio")
     
     # Upload PDF file
     uploaded_file = st.file_uploader("Carica un file PDF", type="pdf")
@@ -130,25 +226,35 @@ def pdf_summary():
         text = extract_text_from_pdf(reader)
         logger.info("Text extraction from PDF completed.")
         
+        # Usa la funzione openai_m per ottenere la chiave API, il modello e la temperatura
+        openai_api_key, model_choice, temperature, summary_language, audio_language, speaker = openai_m()
+        
+        # Verifica che i valori siano stati correttamente restituiti
+        if not openai_api_key or not model_choice or temperature is None:
+            st.error("Configurazione non corretta. Verifica la chiave API e le altre impostazioni.")
+            return
+        
         # Ask the user how many chunks they want
         num_chunks = st.number_input("In quanti pezzi vuoi dividere il PDF?", min_value=1, max_value=20, value=5)
         
         # Split the text into the specified number of chunks
         chunks = split_text_into_chunks(text, num_chunks)
         st.session_state['chunks'] = chunks
-        st.success(f"Testo diviso in {len(chunks)-1} blocchi.")
+        st.success(f"Testo diviso in {len(chunks)} blocchi.")
         
         if 'chunks' in st.session_state:
             chunks = st.session_state['chunks']
 
             if st.button("Riassumi e Scarica"):
-                summarized_text = f"Riassunto - {pdf_filename}\n\n"
+                summarized_text = f"Riassunto - {pdf_filename} ({model_choice}, Temp: {temperature})\n\n"
+                
                 for i, chunk in enumerate(chunks):
                     prev_chunk = chunks[i-1] if i > 0 else ""
                     next_chunk = chunks[i+1] if i < len(chunks) - 1 else ""
-                    
+
                     try:
-                        summary = summarize_text_with_context(chunk, prev_chunk, next_chunk, language="Italian")
+                        # Generate summary with context for the current chunk
+                        summary = summarize_text_with_context(chunk, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language=summary_language)
                         if not summary.strip():
                             summary = "Impossibile generare il riassunto."
                         logger.info(f"Blocco {i+1} riassunto con successo.")
@@ -158,9 +264,20 @@ def pdf_summary():
                         logger.error(f"Errore nel riassumere il blocco {i+1}: {e}")
                     
                     summarized_text += summary + "\n"
+                
+                # Display the summarized text before enhancement
+                st.write("### Testo riassunto prima del miglioramento:")
+                st.write(summarized_text)
+                
+                # Enhance the summarized text and add headings using the same language
+                enhanced_text = enhance_text_with_headings(summarized_text, model_choice, temperature, openai_api_key, language=summary_language)
+                
+                # Display the enhanced text with headings
+                st.write("### Testo migliorato con titoletti:")
+                st.write(enhanced_text)
 
-                txt_data = create_txt(summarized_text)
-                docx_data = create_docx(summarized_text)
+                txt_data = create_txt(enhanced_text)
+                docx_data = create_docx(enhanced_text)
                 
                 zip_data = create_zip_file(txt_data, docx_data, pdf_filename)
                 
@@ -171,6 +288,19 @@ def pdf_summary():
                     mime="application/zip"
                 )
                 logger.info(f"Riassunto esportato come {pdf_filename}_riassunto.zip.")
+
+                # Generazione dell'audio
+                if st.button("Genera Audio"):
+                    audio_path = text_to_speech_edge(enhanced_text, audio_language, speaker)
+                    with open(audio_path, "rb") as audio_file:
+                        audio_bytes = audio_file.read()
+                        st.audio(audio_bytes, format="audio/mp3")
+                        st.download_button(
+                            label="Scarica l'audio",
+                            data=audio_bytes,
+                            file_name=os.path.basename(audio_path),
+                            mime="audio/mp3"
+                        )
 
 if __name__ == "__main__":
    pdf_summary()
