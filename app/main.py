@@ -7,6 +7,7 @@ from amm.delete_file import delete_file_from_database
 from query_database.query_gpt import query_db_gpt4
 from query_database.query_claude import query_db_claude
 from tool.pdf_summary import pdf_summary
+from tool.pdf_summary_a import pdf_summary_a
 from tool.savickas_interview import savickas_interview
 from tool.open_question import open_question
 from mostra_indici import mostra_indici_disponibili
@@ -45,7 +46,7 @@ def display_sub_menu(selected_page):
         sub_page = st.sidebar.selectbox("Seleziona:", sub_page_options)
 
     elif selected_page == "Tool":
-        sub_page_options = ["Riassunto PDF", "Intervista Savickas", "Domande aperte", "TTS Edge"]
+        sub_page_options = ["Riassunto PDF", "Riassunto PDF articoli scientifici", "Intervista Savickas", "Domande aperte", "TTS Edge"]
         sub_page = st.sidebar.selectbox("Seleziona un tool:", sub_page_options)
 
     return sub_page
@@ -91,6 +92,8 @@ def mostra_tool():
     # Mostra solo la funzione corretta per la sottopagina selezionata
     if selected_subpage == "Riassunto PDF":
         pdf_summary()
+    elif selected_subpage == "Riassunto PDF articoli scientifici":
+        pdf_summary_a()
     elif selected_subpage == "Intervista Savickas":
         savickas_interview()
     elif selected_subpage == "Domande aperte":

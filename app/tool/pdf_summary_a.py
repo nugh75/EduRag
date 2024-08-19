@@ -164,11 +164,12 @@ def enhance_text_with_headings(summarized_text, model_choice, temperature, opena
 
         1. Leggi attentamente il testo riassunto.
         2. Identifica le sezioni principali e aggiungi titoli e sottotitoli descrittivi.
+        3. Se è un paper scientifico dividi il testo in queste parti con dei titoli: introduzione, letteratura, obiettivi della ricerca, metodologia, risultati, discussione conclusione. 
         3. Assicurati che il testo sia fluido, coeso e ben organizzato.
-        5. Mantieni un tono neutro e oggettivo, usa uno stile accademico.
-        6. Metti in **grassetto** le definizioni.
-        7. Metti in *corsivo* gli esempi.
-        8. fai una sezione alla fine con la bibliografia in stile APA i testi devono essere presi esclusivamente dal testo. Se non ci sono riferimenti bibliografici non li mettere.
+        4. Mantieni un tono neutro e oggettivo, usa uno stile accademico.
+        5. Metti in **grassetto** le definizioni.
+        6. Metti in *corsivo* gli esempi.
+        7. fai una sezione alla fine con la bibliografia in stile APA i testi devono essere presi esclusivamente dal testo. Se non ci sono riferimenti bibliografici non li mettere.
         """),
         ("human", "{input}")
     ])
@@ -213,7 +214,7 @@ def create_zip_file(txt_data, docx_data, audio_data, pdf_filename):
     logger.info("Zip file created successfully.")
     return zip_buffer
 
-def pdf_summary():
+def pdf_summary_a():
     st.write("### Strumento per Riassumere ed Esportare PDF e Audio")
     
     # Upload PDF file
@@ -298,4 +299,4 @@ def pdf_summary():
                 logger.info(f"Riassunto e audio esportati come {pdf_filename}_riassunto_audio.zip.")
 
 if __name__ == "__main__":
-   pdf_summary()
+   pdf_summary_a()
