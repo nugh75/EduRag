@@ -10,6 +10,7 @@ from tool.pdf_summary import pdf_summary
 from tool.savickas_interview import savickas_interview
 from tool.open_question import open_question
 from mostra_indici import mostra_indici_disponibili
+from tool.voce import voce
 
 
 
@@ -44,7 +45,7 @@ def display_sub_menu(selected_page):
         sub_page = st.sidebar.selectbox("Seleziona:", sub_page_options)
 
     elif selected_page == "Tool":
-        sub_page_options = ["Riassunto PDF", "Intervista Savickas", "Domande aperte"]
+        sub_page_options = ["Riassunto PDF", "Intervista Savickas", "Domande aperte", "TTS Edge"]
         sub_page = st.sidebar.selectbox("Seleziona un tool:", sub_page_options)
 
     return sub_page
@@ -94,6 +95,8 @@ def mostra_tool():
         savickas_interview()
     elif selected_subpage == "Domande aperte":
         open_question()
+    elif selected_subpage == "TTS Edge":
+        voce()
 
 
 # Main application
