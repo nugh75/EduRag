@@ -1,5 +1,3 @@
-# crea_database.py
-
 import os
 import logging
 import time
@@ -13,46 +11,41 @@ from PyPDF2 import PdfReader
 from PyPDF2.errors import PdfReadError
 from pdfminer.high_level import extract_text
 from pdfminer.pdfparser import PDFSyntaxError
+from docx import Document as DocxDocument
+import odf.opendocument as odf
+from odf.text import P
+from pptx import Presentation
 
 def create_database():
-    # Configurazione del logging
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
 
-    # Caricamento dei file PDF tramite Streamlit
-    st.write("### Crea database indicizzato da PDF")
+    st.write("### Crea database indicizzato da file")
     uploaded_files = st.file_uploader(
-        "Carica i tuoi file PDF:", type=["pdf"], accept_multiple_files=True
+        "Carica i tuoi file:", type=["pdf", "odt", "docx", "pptx", "txt"], accept_multiple_files=True
     )
 
-    # Variabile di sessione per memorizzare i metadati aggiornati e la conferma
     if "metadata_list" not in st.session_state:
         st.session_state.metadata_list = []
 
     if "metadata_confirmed" not in st.session_state:
         st.session_state.metadata_confirmed = False
 
-    # Step 1: Verifica e modifica dei metadati
     if uploaded_files and not st.session_state.metadata_confirmed:
         st.write("### Fase 1: Inserimento e Verifica dei Metadati")
 
-        # Dizionario per tenere traccia dei metadati modificati
         updated_metadata = {}
-
-        # Mostra il form di verifica e modifica dei metadati
-        all_filled = True  # Variabile per verificare se tutti i campi sono riempiti
+        all_filled = True
 
         for i, uploaded_file in enumerate(uploaded_files):
             st.write(f"#### Documento: {uploaded_file.name}")
 
-            # Leggi i metadati del file e mostralo solo se non è stato ancora modificato
             if f"title_{i}" not in updated_metadata:
                 initial_metadata = extract_metadata(uploaded_file)
                 updated_metadata[f"title_{i}"] = initial_metadata["title"]
                 updated_metadata[f"author_{i}"] = initial_metadata["author"]
 
-            # Modifica i metadati solo se tutti i campi sono compilati
             title_input = st.text_input(
                 f"Titolo per '{uploaded_file.name}':", updated_metadata[f"title_{i}"], key=f"title_{i}"
             )
@@ -63,14 +56,11 @@ def create_database():
             if title_input.strip() == "" or author_input.strip() == "":
                 all_filled = False
 
-            # Aggiorna i metadati nei dizionario intermedio
             updated_metadata[f"title_{i}"] = title_input
             updated_metadata[f"author_{i}"] = author_input
 
-        # Bottone di conferma dei metadati
         if st.button("Carica Metadati"):
             if all_filled:
-                # Applica i metadati aggiornati a st.session_state
                 st.session_state.metadata_list = [
                     {
                         "file": uploaded_file,
@@ -86,27 +76,20 @@ def create_database():
             else:
                 st.error("Compila tutti i campi dei metadati prima di caricarli.")
 
-    # Step 2: Embedding e creazione dell'indice FAISS
     if st.session_state.metadata_confirmed:
         st.write("### Fase 2: Embedding e Creazione dell'Indice FAISS")
-
-        # Mostra messaggio di caricamento dei metadati
         st.info("Caricamento metadati...")
 
-        # Caricamento e parsing dei PDF
         all_documents = []
         for i, entry in enumerate(st.session_state.metadata_list):
             file = entry["file"]
             metadata = entry["metadata"]
 
-            # Parse the PDF file for content
-            documents, structured_content = load_pdf(file, metadata)
+            documents, structured_content = load_file(file, metadata)
             all_documents.extend(documents)
 
-            # Update metadata list with structured content
             st.session_state.metadata_list[i]["structured_content"] = structured_content
 
-        # Input dell'utente tramite Streamlit
         chunk_size = 1000
         chunk_overlap = 20
         min_chunk_length = 50
@@ -117,38 +100,31 @@ def create_database():
             "Nome del database indicizzato:", "Inserisci il nome del database"
         )
 
-        # Input per la descrizione dell'indice
         index_description = st.text_area(
             "Descrizione del database:",
             "Inserisci una breve descrizione del database indicizzato",
         )
 
-        # Cartella per l'indice FAISS è fissata a 'db/<nome_sotto_cartella>'
         faiss_index_folder = os.path.join("app/db", subfolder_name)
 
-        # Verifica se il database esiste già
         if not subfolder_name:
             st.error("Inserisci un nome valido per il database indicizzato.")
             return
 
         if st.button("Procedi con l'Embedding e la Creazione dell'Indice"):
-            # Aggiorna il messaggio di stato
             progress_text = st.empty()
             progress_text.text("Divisione dei documenti in chunk...")
 
-            # Inizializzare il Text Splitter
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size, chunk_overlap=chunk_overlap
             )
 
-            # Suddividere i documenti in chunk con i metadati aggiornati
             chunked_documents = []
             for entry in st.session_state.metadata_list:
                 title = entry["metadata"]["title"]
                 author = entry["metadata"]["author"]
                 structured_content = entry["structured_content"]
 
-                # Propaga i metadati aggiornati su tutti i chunk
                 updated_metadata = {
                     "title": title,
                     "author": author,
@@ -156,7 +132,6 @@ def create_database():
                 for page_number, page_content in enumerate(structured_content, start=1):
                     chunks = text_splitter.split_text(page_content)
                     for chunk in chunks:
-                        # Aggiungi il numero di pagina ai metadati
                         chunk_metadata = updated_metadata.copy()
                         chunk_metadata["page_number"] = page_number
 
@@ -164,41 +139,33 @@ def create_database():
                             Document(page_content=chunk, metadata=chunk_metadata)
                         )
 
-            # Rimuovere i chunk troppo piccoli
             splits = [sp for sp in chunked_documents if len(sp.page_content) >= min_chunk_length]
 
-            # Verifica che ci siano chunk validi prima di procedere
             if not splits:
                 st.error("Nessun chunk valido è stato creato. Verifica i parametri di suddivisione.")
                 logging.error("Nessun chunk valido è stato creato. Verifica i parametri di suddivisione.")
                 return
 
-            # **Visualizzare i primi 4 chunk completi**
             st.header("Primi 3 Chunk Estratti")
             for i, chunk in enumerate(splits[:3]):
-                # Mostra i metadati del chunk
                 st.subheader(f"Chunk {i + 1} - Metadati:")
                 st.json(chunk.metadata)
 
                 st.subheader(f"Contenuto del Chunk {i + 1}:")
-                st.write(chunk.page_content)  # Mostra l'intero contenuto del chunk
+                st.write(chunk.page_content)
 
-            # Mostra messaggio di avanzamento mentre si crea l'indice
             progress_text.text("Creazione dell'indice FAISS...")
 
-            # Aggiunge un effetto visivo di avanzamento
             for _ in range(5):
                 for dots in range(1, 6):
                     progress_text.text(f"Sto elaborando il database{'.' * dots}")
                     time.sleep(0.5)
 
-            # Creare i documenti per l'indice
             docs = [
                 Document(page_content=split.page_content, metadata=split.metadata)
                 for split in splits
             ]
 
-            # Verifica se ci sono documenti da indicizzare
             if not docs:
                 st.error(
                     "Nessun documento da indicizzare. Verifica che i documenti contengano testo valido."
@@ -208,58 +175,64 @@ def create_database():
                 )
                 return
 
-            # Creare l'indice FAISS
             index = FAISS.from_documents(docs, embeddings)
 
-            # Creare la cartella dell'indice se non esiste
             if not os.path.exists(faiss_index_folder):
                 os.makedirs(faiss_index_folder)
 
-            # Salvare l'indice nella cartella specificata
             index.save_local(faiss_index_folder)
 
-            # Salvare la descrizione e i titoli dei PDF
             description_file_path = os.path.join(faiss_index_folder, "description.txt")
             with open(description_file_path, "w") as desc_file:
                 desc_file.write(f"Descrizione dell'indice: {index_description}\n")
-                desc_file.write("Titoli dei documenti PDF:\n")
+                desc_file.write("Titoli dei documenti:\n")
                 for entry in st.session_state.metadata_list:
                     desc_file.write(f"- {entry['metadata']['title']}\n")
 
-            # Messaggio di successo finale
             progress_text.text(f"Indice '{subfolder_name}' creato con successo.")
 
 
 def extract_metadata(file):
-    """Estrae i metadati dal PDF."""
-    metadata = {}
+    metadata = {"title": "Sconosciuto", "author": "Sconosciuto"}
     try:
-        # Utilizzo di PyPDF2 per estrarre i metadati
-        reader = PdfReader(file)
-        doc_info = reader.metadata
-
-        # Verifica e aggiungi metadati disponibili
-        metadata["title"] = doc_info.get(
-            "/Title", "Sconosciuto"
-        )  # Fallback a 'Sconosciuto' se il titolo non è specificato
-        metadata["author"] = doc_info.get(
-            "/Author", "Sconosciuto"
-        )  # Fallback a 'Sconosciuto' se l'autore non è specificato
-
-    except PDFSyntaxError as e:
-        logging.error(
-            f"Errore nell'estrazione dei metadati dal file {file.name}: {e}"
-        )
-    except PdfReadError as e:
-        logging.error(f"Errore nella lettura del file {file.name} con PyPDF2: {e}")
+        if file.name.endswith(".pdf"):
+            reader = PdfReader(file)
+            doc_info = reader.metadata
+            metadata["title"] = doc_info.get("/Title", "Sconosciuto")
+            metadata["author"] = doc_info.get("/Author", "Sconosciuto")
+        elif file.name.endswith(".docx"):
+            doc = DocxDocument(file)
+            metadata["title"] = doc.core_properties.title or "Sconosciuto"
+            metadata["author"] = doc.core_properties.author or "Sconosciuto"
+        elif file.name.endswith(".odt"):
+            odt_file = odf.load(file)
+            metadata["title"] = odt_file.meta.get("title", "Sconosciuto")
+            metadata["author"] = odt_file.meta.get("creator", "Sconosciuto")
+        elif file.name.endswith(".pptx"):
+            ppt = Presentation(file)
+            metadata["title"] = ppt.core_properties.title or "Sconosciuto"
+            metadata["author"] = ppt.core_properties.author or "Sconosciuto"
+        elif file.name.endswith(".txt"):
+            metadata["title"] = file.name
+            metadata["author"] = "Sconosciuto"
+    except Exception as e:
+        logging.error(f"Errore nell'estrazione dei metadati dal file {file.name}: {e}")
 
     return metadata
 
 
-def load_pdf(file, metadata):
-    """Carica il documento PDF e restituisce i documenti con metadati e il contenuto strutturato."""
+def load_file(file, metadata):
     try:
-        structured_content = extract_structured_content(file)
+        if file.name.endswith(".pdf"):
+            structured_content = extract_structured_content_pdf(file)
+        elif file.name.endswith(".docx"):
+            structured_content = extract_structured_content_docx(file)
+        elif file.name.endswith(".odt"):
+            structured_content = extract_structured_content_odt(file)
+        elif file.name.endswith(".pptx"):
+            structured_content = extract_structured_content_pptx(file)
+        elif file.name.endswith(".txt"):
+            structured_content = extract_structured_content_txt(file)
         documents = create_documents_with_metadata(structured_content, metadata)
         return documents, structured_content
     except Exception as e:
@@ -267,21 +240,46 @@ def load_pdf(file, metadata):
         return [], []
 
 
-def extract_structured_content(file):
-    """Estrae il contenuto strutturato dal PDF."""
+def extract_structured_content_pdf(file):
     structured_content = []
     with pdfplumber.open(file) as pdf:
-        for page_number, page in enumerate(pdf.pages):
+        for page in pdf.pages:
             text = page.extract_text()
-            structured_content.append(
-                text
-            )  # Mantieni il contenuto della pagina per la suddivisione
-
+            structured_content.append(text)
     return structured_content
 
 
+def extract_structured_content_docx(file):
+    doc = DocxDocument(file)
+    return [para.text for para in doc.paragraphs if para.text.strip()]
+
+
+def extract_structured_content_odt(file):
+    odt_file = odf.load(file)
+    text_content = []
+    for elem in odt_file.getElementsByType(P):
+        text_content.append(str(elem))
+    return text_content
+
+
+def extract_structured_content_pptx(file):
+    ppt = Presentation(file)
+    text_content = []
+    for slide in ppt.slides:
+        slide_text = []
+        for shape in slide.shapes:
+            if hasattr(shape, "text"):
+                slide_text.append(shape.text)
+        text_content.append("\n".join(slide_text))
+    return text_content
+
+
+def extract_structured_content_txt(file):
+    text = file.read().decode("utf-8")
+    return text.splitlines()
+
+
 def create_documents_with_metadata(chunks, metadata):
-    """Crea documenti con metadati dai chunk di testo."""
     docs = []
     for chunk in chunks:
         doc = Document(page_content=chunk, metadata=metadata)

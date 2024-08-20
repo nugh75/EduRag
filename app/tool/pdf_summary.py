@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from docx import Document
+from docx.shared import Pt
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import zipfile
 import edge_tts
 import tempfile
@@ -38,8 +40,7 @@ language_dict = {
 }
 
 async def text_to_speech_edge_async(text, language_code, speaker):
-    # Rimozione di segni di marcatura che potrebbero creare problemi nella lettura ad alta voce
-    clean_text = re.sub(r'[#*]', '', text)
+    clean_text = clean_markdown_formatting(text)  # Rimuove la formattazione Markdown
     voice = language_dict[language_code][speaker]
     communicate = edge_tts.Communicate(clean_text, voice)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
@@ -51,31 +52,25 @@ def text_to_speech_edge(text, language_code, speaker):
     return asyncio.run(text_to_speech_edge_async(text, language_code, speaker))
 
 def openai_m():
-    # Aggiunta delle opzioni per selezionare il modello LLM e inserire la chiave API
     api_choice = st.sidebar.selectbox("Scegli la chiave API da usare", ["Usa chiave di sistema", "Inserisci la tua chiave API"], index=1)
     
     if api_choice == "Inserisci la tua chiave API":
         openai_api_key = st.sidebar.text_input("Inserisci la tua chiave API OpenAI", st.session_state.get("user_api_key", ""), type="password")
-        st.session_state.user_api_key = openai_api_key  # Salva la chiave API inserita dall'utente
+        st.session_state.user_api_key = openai_api_key
     else:
         openai_api_key = os.getenv("OPENAI_API_KEY")
     
-    # Controlla se la chiave API è stata impostata
     if not openai_api_key:
         st.error("Errore: La chiave API non è stata inserita o non è configurata correttamente.")
-        return None, None, None  # Restituisci valori None per evitare il crash
+        return None, None, None
 
     model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=1)
-    st.session_state.model_choice = model_choice  # Salva la scelta del modello
+    st.session_state.model_choice = model_choice
     
-    # Aggiunta dello slider per la temperatura
     temperature = st.sidebar.slider("Imposta la temperatura del modello", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
-    st.session_state.temperature = temperature  # Salva la temperatura scelta
+    st.session_state.temperature = temperature
 
-    # Slider per selezionare la lingua del riassunto e della voce dell'audio
     language = st.sidebar.selectbox("Seleziona la lingua per il riassunto e l'audio", ["Italian", "English", "Swedish"])
-    
-    # Slider per selezionare la voce dell'audio
     speaker = st.sidebar.selectbox("Seleziona la voce per l'audio", list(language_dict[language].keys()))
 
     return openai_api_key, model_choice, temperature, language, speaker
@@ -86,6 +81,52 @@ def extract_text_from_pdf(reader):
         text += page.extract_text() + "\n\n"
     return text
 
+def extract_text_from_doc(doc_file):
+    logger.info("Extracting text from DOC file.")
+    doc = Document(doc_file)
+    text = "\n\n".join([para.text for para in doc.paragraphs])
+    return text
+
+def extract_text_from_txt(txt_file):
+    logger.info("Extracting text from TXT file.")
+    text = txt_file.read().decode("utf-8")
+    return text
+
+def clean_markdown_formatting(text):
+    # Rimuove simboli Markdown
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Rimuove grassetto
+    text = re.sub(r'\*(.*?)\*', r'\1', text)      # Rimuove corsivo
+    text = re.sub(r'\#\#(.*?)\n', r'\1\n', text)  # Rimuove titoli di secondo livello
+    text = re.sub(r'\#(.*?)\n', r'\1\n', text)    # Rimuove titoli di primo livello
+    text = re.sub(r'[-*]\s', '', text)            # Rimuove elenchi puntati
+    return text
+
+def upload_and_extract_text():
+    st.write("### Strumento per Riassumere ed Esportare PDF, DOCX, TXT e Audio")
+
+    uploaded_file = st.file_uploader("Carica un file PDF, DOCX o TXT", type=["pdf", "docx", "txt"])
+
+    if uploaded_file is not None:
+        file_type = uploaded_file.name.split('.')[-1].lower()
+        pdf_filename = os.path.splitext(uploaded_file.name)[0]
+        logger.info(f"Uploaded file: {uploaded_file.name}")
+
+        if file_type == "pdf":
+            reader = PyPDF2.PdfReader(uploaded_file)
+            text = extract_text_from_pdf(reader)
+        elif file_type == "docx":
+            text = extract_text_from_doc(uploaded_file)
+        elif file_type == "txt":
+            text = extract_text_from_txt(uploaded_file)
+        else:
+            st.error("Formato file non supportato.")
+            return None, None
+
+        logger.info("Text extraction completed.")
+        return clean_markdown_formatting(text), pdf_filename
+    else:
+        return None, None
+
 def split_text_into_chunks(text, num_chunks):
     chunk_size = len(text) // num_chunks
     chunks = []
@@ -93,26 +134,24 @@ def split_text_into_chunks(text, num_chunks):
     
     for i in range(num_chunks):
         end = start + chunk_size
-        if i == num_chunks - 1:  # L'ultimo chunk prende tutto il testo rimanente
+        if i == num_chunks - 1:
             end = len(text)
         chunk = text[start:end].strip()
         chunks.append(chunk)
         start = end
-        logger.info(f"Chunk {i+1}: {chunk[:100]}...")  # Mostra l'inizio di ciascun chunk per verifica
+        logger.info(f"Chunk {i+1}: {chunk[:100]}...")
     
     return chunks
 
-def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language="Italian"):
+def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language="Italian", custom_prompt=""):
     logger.info(f"Starting text summarization with context in {language}.")
     
-    # Set up the chat model with the specific model, temperature, and API key
     llm = ChatOpenAI(
         model=model_choice,
         temperature=temperature,
         openai_api_key=openai_api_key
     )
     
-    # Create a chat prompt template with context from previous and next chunks
     template = ChatPromptTemplate.from_messages([
         ("system", f"""
         Sei un assistente AI specializzato nel riassumere testi in {language}. Il tuo compito è creare un riassunto conciso, fluido e coeso del testo fornito.
@@ -123,18 +162,20 @@ def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temp
         2. Identifica i punti chiave e le informazioni principali.
         3. Crea un riassunto che catturi l'essenza del testo originale.
         4. Assicurati che il riassunto sia fluido e coeso, evitando frasi introduttive come "il testo discute" o "il documento descrive" o "Il testo analizza".
-        5. Mantieni un tono neutro e oggettivo, usa uno stile accademico.
-        6. Il riassunto dovrebbe essere significativamente più breve del testo originale: non più di un quarto della lunghezza originale.
+        5. Mantieni un tono neutro e oggettivo, usa uno stile accademico. Mantieni i termini tecnici in lingua originale. Spiega sempre gli acronimi.
+        6. Il riassunto dovrebbe essere significativamente più breve del testo originale: non più di un terzo della lunghezza originale.
         7. Metti in evidenza definizioni ed esempi.
-        8. Riporta quando li trovi i riferimenti bibliografi così come sono nel testo
-        9. Considera il contesto fornito dai blocchi precedente e successivo per garantire continuità e coerenza.
-                - Testo precedente: {{previous_chunk}}
-                - Testo successivo: {{next_chunk}}
+        8. Considera il contesto fornito dai blocchi precedente e successivo per garantire continuità e coerenza.
+        - Testo precedente: {{previous_chunk}}
+        - Testo successivo: {{next_chunk}}
         """),
         ("human", "{input}")
     ])
     
-    # Format the prompt with the specific input and context
+    if custom_prompt:
+        custom_text = f"\n\n{custom_prompt}"
+        text += custom_text
+    
     chain = template.pipe(llm)
     response = chain.invoke({
         "previous_chunk": prev_chunk,
@@ -145,48 +186,183 @@ def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temp
     logger.info(f"Text summarization with context in {language} completed.")
     return response.content
 
-def enhance_text_with_headings(summarized_text, model_choice, temperature, openai_api_key, language="Italian"):
+def enhance_text_with_headings(summarized_text, model_choice, temperature, openai_api_key, language="Italian", num_parts=3, custom_prompt=""):
     logger.info(f"Starting text enhancement with headings in {language}.")
     
-    # Set up the chat model with the specific model, temperature, and API key
     llm = ChatOpenAI(
         model=model_choice,
         temperature=temperature,
         openai_api_key=openai_api_key
     )
     
-    # Create a chat prompt template to improve the text and add headings
+    text_parts = split_text_into_chunks(summarized_text, num_parts)
+    
+    enhanced_text = ""
+    
+    for part in text_parts:
+        if custom_prompt:
+            part += f"\n\n{custom_prompt}"
+        
+        template = ChatPromptTemplate.from_messages([
+            ("system", f"""
+            Sei un assistente AI specializzato nel migliorare testi riassunti e aggiungere titoli appropriati su due livelli in {language}. Il tuo compito è rivedere il testo fornito, migliorarlo, inserire titoli che riflettano il contenuto di ciascuna sezione ed espandendo ogni sezione.
+
+            Per migliorare il testo, segui queste linee guida:
+
+            1. Leggi attentamente il testo riassunto.
+            2. Identifica le sezioni principali e aggiungi titoli e sottotitoli descrittivi.
+            3. Assicurati che il testo sia fluido, coeso e ben organizzato.
+            4. Mantieni un tono neutro e oggettivo. Sii sempre discorsivo e evita bullet point.
+            5. Metti in grassetto le definizioni.
+            6. Metti in corsivo gli esempi.
+            7. Non includere tabelle o immagini nel file audio.
+            """),
+            ("human", "{input}")
+        ])
+        
+        chain = template.pipe(llm)
+        response = chain.invoke({
+            "input": part
+        })
+        
+        enhanced_text += response.content + "\n"
+
+    logger.info(f"Text enhancement with headings in {language} completed.")
+    return enhanced_text
+
+def generate_outline_from_enhanced_text(enhanced_text, model_choice, temperature, openai_api_key, language="Italian", num_parts=3):
+    logger.info(f"Starting outline generation from enhanced text in {language}.")
+    
+    llm = ChatOpenAI(
+        model=model_choice,
+        temperature=temperature,
+        openai_api_key=openai_api_key
+    )
+    
+    text_parts = split_text_into_chunks(enhanced_text, num_parts)
+    
+    outline_text = ""
+    
+    for i, part in enumerate(text_parts):
+        template = ChatPromptTemplate.from_messages([
+            ("system", f"""
+            Sei un assistente AI specializzato nella creazione di outline dettagliati basati su testi migliorati. Il tuo compito è generare un outline che rifletta la struttura e i punti chiave del testo fornito, inclusi eventuali dati in formato tabellare e immagini presenti nel testo originale.
+
+            1. Leggi attentamente la parte del testo.
+            2. Identifica i punti principali, gli argomenti chiave, le tabelle e le immagini.
+            3. Crea un outline gerarchico con sezioni e sottosezioni.
+            4. Mantieni un tono neutro e oggettivo.
+            """),
+            ("human", "{input}")
+        ])
+        
+        chain = template.pipe(llm)
+        response = chain.invoke({
+            "input": part
+        })
+        
+        outline_text += f"{response.content}\n\n"  # Rimuovi la dicitura "Parte X:"
+
+    logger.info(f"Outline generation from enhanced text in {language} completed.")
+    return outline_text
+
+
+def format_bibliography_in_apa(enhanced_text, model_choice, temperature, openai_api_key, language="Italian"):
+    logger.info(f"Starting bibliography formatting in APA style in {language}.")
+    
+    llm = ChatOpenAI(
+        model=model_choice,
+        temperature=temperature,
+        openai_api_key=openai_api_key
+    )
+    
     template = ChatPromptTemplate.from_messages([
         ("system", f"""
-        Sei un assistente AI specializzato nel migliorare testi riassunti e aggiungere titoletti appropriati in {language}. Il tuo compito è rivedere il testo fornito, migliorarlo e inserire titoletti che riflettano il contenuto di ciascuna sezione.
+        Sei un assistente AI specializzato nel formattare bibliografie in stile APA in {language}. Il tuo compito è esaminare il testo fornito, identificare eventuali fonti bibliografiche e riformattarle secondo lo stile APA.
 
-        Per migliorare il testo, segui queste linee guida:
+        Per formattare le fonti bibliografiche, segui queste linee guida:
 
-        1. Leggi attentamente il testo riassunto.
-        2. Identifica le sezioni principali e aggiungi titoli e sottotitoli descrittivi.
-        3. Assicurati che il testo sia fluido, coeso e ben organizzato.
-        5. Mantieni un tono neutro e oggettivo, usa uno stile accademico.
-        6. Metti in **grassetto** le definizioni.
-        7. Metti in *corsivo* gli esempi.
-        8. fai una sezione alla fine con la bibliografia in stile APA i testi devono essere presi esclusivamente dal testo. Se non ci sono riferimenti bibliografici non li mettere.
+        1. Cerca nel testo eventuali fonti bibliografiche.
+        2. Riformatta ogni fonte bibliografica secondo lo stile APA.
+        3. Inserisci le fonti riformattate in una sezione di bibliografia alla fine del testo.
         """),
         ("human", "{input}")
     ])
     
-    # Format the prompt with the specific input
     chain = template.pipe(llm)
     response = chain.invoke({
-        "input": summarized_text
+        "input": enhanced_text
     })
     
-    logger.info(f"Text enhancement with headings in {language} completed.")
-    return response.content
+    logger.info(f"Bibliography formatting in APA style in {language} completed.")
+    
+    final_text_with_bibliography = response.content
+    return final_text_with_bibliography
 
-def create_docx(text):
+def create_markdown_file(text, filename):
+    """
+    Crea un file markdown con il testo fornito.
+    """
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(text)
+
+def apply_text_formatting(paragraph, text):
+    """
+    Applica la formattazione di grassetto e corsivo al testo.
+    """
+    # Gestione del grassetto e del corsivo combinati: ***testo***
+    matches = re.findall(r'\*\*\*(.*?)\*\*\*', text)
+    for match in matches:
+        run = paragraph.add_run(match)
+        run.bold = True
+        run.italic = True
+        text = text.replace(f'***{match}***', '')
+
+    # Gestione del grassetto: **testo**
+    matches = re.findall(r'\*\*(.*?)\*\*', text)
+    for match in matches:
+        run = paragraph.add_run(match)
+        run.bold = True
+        text = text.replace(f'**{match}**', '')
+
+    # Gestione del corsivo: *testo*
+    matches = re.findall(r'\*(.*?)\*', text)
+    for match in matches:
+        run = paragraph.add_run(match)
+        run.italic = True
+        text = text.replace(f'*{match}*', '')
+
+    # Aggiungi il testo rimanente senza formattazione
+    paragraph.add_run(text)
+
+def create_docx(text, sections=None):
     logger.info(f"Creating the .docx file in memory.")
     doc = Document()
-    doc.add_paragraph(text)
     
+    if sections is None:
+        sections = [("Testo", text)]
+    
+    for section in sections:
+        if isinstance(section, tuple) and len(section) == 2:
+            section_name, section_text = section
+            doc.add_heading(section_name, level=1)
+            for paragraph_text in section_text.split("\n"):
+                if paragraph_text.strip():
+                    # Identifica e gestisci i titoli
+                    if paragraph_text.startswith("###"):
+                        doc.add_heading(paragraph_text.strip("# "), level=3)
+                    elif paragraph_text.startswith("##"):
+                        doc.add_heading(paragraph_text.strip("# "), level=2)
+                    elif paragraph_text.startswith("#"):
+                        doc.add_heading(paragraph_text.strip("# "), level=1)
+                    else:
+                        # Se non è un titolo, applica la formattazione
+                        paragraph = doc.add_paragraph()
+                        apply_text_formatting(paragraph, paragraph_text)
+        else:
+            logger.error(f"Invalid section format: {section}")
+            raise ValueError("Each section should be a tuple with two elements: (section_name, section_text)")
+
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -194,108 +370,168 @@ def create_docx(text):
     logger.info(f".docx file successfully created in memory.")
     return buffer
 
+def create_outline_bibliography_docx(outline, bibliography):
+    logger.info(f"Creating the outline and bibliography .docx file in memory.")
+    
+    sections = [("Outline", outline), ("Bibliografia", bibliography)]
+    docx_buffer = create_docx("", sections=sections)
+    
+    logger.info(f"Outline and bibliography .docx file successfully created in memory.")
+    return docx_buffer
+
+def clean_markdown_formatting(text):
+    """
+    Rimuove la formattazione Markdown dal testo ma mantiene gli elenchi puntati.
+    """
+    # Rimuovi grassetto e corsivo combinati: ***testo***
+    text = re.sub(r'\*\*\*(.*?)\*\*\*', r'\1', text)
+    
+    # Rimuovi grassetto: **testo**
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    
+    # Rimuovi corsivo: *testo*
+    text = re.sub(r'\*(.*?)\*', r'\1', text)
+    
+    # Rimuovi titoli di terzo livello: ### Titolo
+    text = re.sub(r'###\s*(.*?)\s*', r'\1\n', text)
+    
+    # Rimuovi titoli di secondo livello: ## Titolo
+    text = re.sub(r'##\s*(.*?)\s*', r'\1\n', text)
+    
+    # Rimuovi titoli di primo livello: # Titolo
+    text = re.sub(r'#\s*(.*?)\s*', r'\1\n', text)
+    
+    # Mantieni gli elenchi puntati, non rimuovere i simboli `-` o `*` usati come marcatori di elenchi
+    # Quindi, non aggiungiamo un'ulteriore espressione regolare qui.
+
+    return text
+
+
 def create_txt(text):
     logger.info(f"Creating the .txt file in memory.")
+    text = clean_markdown_formatting(text)  # Rimuove la formattazione Markdown
     buffer = BytesIO()
     buffer.write(text.encode('utf-8'))
     buffer.seek(0)
     logger.info(f".txt file successfully created in memory.")
     return buffer
 
-def create_zip_file(txt_data, docx_data, audio_data, pdf_filename):
-    logger.info(f"Creating a zip file containing .txt, .docx files, and audio.")
+
+def create_md(text):
+    logger.info(f"Creating the .md file in memory.")
+    buffer = BytesIO()
+    buffer.write(text.encode('utf-8'))
+    buffer.seek(0)
+    logger.info(f".md file successfully created in memory.")
+    return buffer
+
+def create_outline_bibliography_txt(outline, bibliography):
+    logger.info(f"Creating the outline and bibliography .txt file in memory.")
+    buffer = BytesIO()
+    buffer.write(("Outline:\n" + outline + "\n\nBibliografia:\n" + bibliography).encode('utf-8'))
+    buffer.seek(0)
+    logger.info(f"Outline and bibliography .txt file successfully created in memory.")
+    return buffer
+
+def create_zip_file(main_txt_data, main_docx_data, outline_bibliography_txt_data, outline_bibliography_docx_data, audio_data, pdf_filename, main_md_data):
+    logger.info(f"Creating a zip file containing .txt, .docx, .md files, and audio.")
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-        zip_file.writestr(f"{pdf_filename}_riassunto.txt", txt_data.getvalue().decode('utf-8'))
-        zip_file.writestr(f"{pdf_filename}_riassunto.docx", docx_data.getvalue())
+        zip_file.writestr(f"{pdf_filename}_riassunto.txt", main_txt_data.getvalue().decode('utf-8'))
+        zip_file.writestr(f"{pdf_filename}_riassunto.docx", main_docx_data.getvalue())
+        zip_file.writestr(f"{pdf_filename}_outline_bibliografia.txt", outline_bibliography_txt_data.getvalue().decode('utf-8'))
+        zip_file.writestr(f"{pdf_filename}_outline_bibliografia.docx", outline_bibliography_docx_data.getvalue())
+        zip_file.writestr(f"{pdf_filename}_riassunto.md", main_md_data.getvalue().decode('utf-8'))
         zip_file.writestr(f"{pdf_filename}_audio.mp3", audio_data.getvalue())
     zip_buffer.seek(0)
     logger.info("Zip file created successfully.")
     return zip_buffer
 
 def pdf_summary():
-    st.write("### Strumento per Riassumere ed Esportare PDF e Audio")
+    text, pdf_filename = upload_and_extract_text()
     
-    # Upload PDF file
-    uploaded_file = st.file_uploader("Carica un file PDF", type="pdf")
-    
-    if uploaded_file is not None:
-        # Extract the filename without the extension
-        pdf_filename = os.path.splitext(uploaded_file.name)[0]
-        logger.info(f"Uploaded file: {uploaded_file.name}")
-        
-        reader = PyPDF2.PdfReader(uploaded_file)
-        text = extract_text_from_pdf(reader)
-        logger.info("Text extraction from PDF completed.")
-        
-        # Usa la funzione openai_m per ottenere la chiave API, il modello, la temperatura, la lingua e la voce
+    if text is not None:
         openai_api_key, model_choice, temperature, language, speaker = openai_m()
         
-        # Verifica che i valori siano stati correttamente restituiti
         if not openai_api_key or not model_choice or temperature is None:
             st.error("Configurazione non corretta. Verifica la chiave API e le altre impostazioni.")
             return
         
-        # Ask the user how many chunks they want
-        num_chunks = st.number_input("In quanti pezzi vuoi dividere il PDF?", min_value=1, max_value=20, value=5)
+        # Box per aggiungere testo personalizzato ai prompt
+        custom_prompt_first = st.text_area("A chi è rivolto il riassunto? ci sono istruzioni particolari che vorresti includere per fare il riassunto? (Riassunto)", "")
+        custom_prompt_second = st.text_area("Ci sono istruzionio che vorresti includere per la revisione del riassunto? (Miglioramento e Titolazione)", "")
         
-        # Split the text into the specified number of chunks
-        chunks = split_text_into_chunks(text, num_chunks)
-        st.session_state['chunks'] = chunks
-        st.success(f"Testo diviso in {len(chunks)} blocchi.")
-        
-        if 'chunks' in st.session_state:
-            chunks = st.session_state['chunks']
+        num_chunks = st.number_input("In quanti pezzi vuoi dividere il testo per il riassunto?", min_value=1, max_value=20, value=5)
+        num_parts = st.number_input("In quante parti vuoi dividere il testo per il miglioramento con titoletti?", min_value=1, max_value=10, value=3)
 
-            if st.button("Riassumi e Scarica"):
-                summarized_text = f"Riassunto - {pdf_filename} ({model_choice}, Temp: {temperature})\n\n"
-                
-                for i, chunk in enumerate(chunks):
-                    prev_chunk = chunks[i-1] if i > 0 else ""
-                    next_chunk = chunks[i+1] if i < len(chunks) - 1 else ""
+        # Attiva il processo solo dopo che l'utente ha fornito tutte le informazioni
+        if st.button("Avvia il processo di riassunto e miglioramento"):
+            chunks = split_text_into_chunks(text, num_chunks)
+            st.success(f"Testo diviso in {len(chunks)} blocchi.")
+            
+            summarized_text = f"Riassunto - {pdf_filename} ({model_choice}, Temp: {temperature})\n\n"
+            
+            for i, chunk in enumerate(chunks):
+                prev_chunk = chunks[i-1] if i > 0 else ""
+                next_chunk = chunks[i+1] if i < len(chunks) - 1 else ""
 
-                    try:
-                        # Generate summary with context for the current chunk
-                        summary = summarize_text_with_context(chunk, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language=language)
-                        if not summary.strip():
-                            summary = "Impossibile generare il riassunto."
-                        logger.info(f"Blocco {i+1} riassunto con successo.")
-                        
-                    except Exception as e:
-                        summary = "Errore durante la generazione del riassunto."
-                        logger.error(f"Errore nel riassumere il blocco {i+1}: {e}")
+                try:
+                    summary = summarize_text_with_context(chunk, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language=language, custom_prompt=custom_prompt_first)
+                    if not summary.strip():
+                        summary = "Impossibile generare il riassunto."
+                    logger.info(f"Blocco {i+1} riassunto con successo.")
                     
-                    summarized_text += summary + "\n"
+                    if i == 0:
+                        st.write("### Primo Riassunto Generato:")
+                        st.write(summary)
+                    
+                except Exception as e:
+                    summary = "Errore durante la generazione del riassunto."
+                    logger.error(f"Errore nel riassumere il blocco {i+1}: {e}")
                 
-                # Display the summarized text before enhancement
-                st.write("### Testo riassunto prima del miglioramento:")
-                st.write(summarized_text)
-                
-                # Enhance the summarized text and add headings using the same language
-                enhanced_text = enhance_text_with_headings(summarized_text, model_choice, temperature, openai_api_key, language=language)
-                
-                # Display the enhanced text with headings
-                st.write("### Testo migliorato con titoletti:")
-                st.write(enhanced_text)
+                summarized_text += summary + "\n"
+            
+            enhanced_text = enhance_text_with_headings(summarized_text, model_choice, temperature, openai_api_key, language=language, num_parts=num_parts, custom_prompt=custom_prompt_second)
 
-                txt_data = create_txt(enhanced_text)
-                docx_data = create_docx(enhanced_text)
-                
-                # Genera immediatamente il file audio
-                audio_path = text_to_speech_edge(enhanced_text, language, speaker)
-                with open(audio_path, "rb") as audio_file:
-                    audio_bytes = BytesIO(audio_file.read())
+            outline_text = generate_outline_from_enhanced_text(enhanced_text, model_choice, temperature, openai_api_key, language=language, num_parts=num_parts)
 
-                # Crea un file ZIP contenente il testo e l'audio
-                zip_data = create_zip_file(txt_data, docx_data, audio_bytes, pdf_filename)
+            bibliography_text = format_bibliography_in_apa(enhanced_text, model_choice, temperature, openai_api_key, language=language)
+            
+            st.session_state['final_text'] = enhanced_text
+            st.session_state['outline_text'] = outline_text
+            st.session_state['bibliography_text'] = bibliography_text
+            
+            audio_text = re.sub(r'<img.*?>|<table.*?>.*?</table>', '', enhanced_text, flags=re.DOTALL)
+            audio_path = text_to_speech_edge(audio_text, language, speaker)
+            with open(audio_path, "rb") as audio_file:
+                st.session_state['audio_bytes'] = BytesIO(audio_file.read())
+
+            # Crea i file DOCX, TXT e MD per il riassunto principale
+            main_txt_data = create_txt(enhanced_text)
+            main_docx_data = create_docx(enhanced_text)
+            main_md_data = create_md(enhanced_text)
+            
+            # Crea i file DOCX e TXT per l'outline e la bibliografia
+            outline_bibliography_txt_data = create_outline_bibliography_txt(outline_text, bibliography_text)
+            outline_bibliography_docx_data = create_outline_bibliography_docx(outline_text, bibliography_text)
+            
+            st.write("### Testo finale (Riassunto):")
+            st.write(enhanced_text, unsafe_allow_html=True)
+            
+            st.write("### Outline e Bibliografia (in un altro file):")
+            st.write(outline_text)
+            st.write(bibliography_text)
+
+            if all(key in st.session_state for key in ['final_text', 'outline_text', 'bibliography_text', 'audio_bytes']):
+                zip_data = create_zip_file(main_txt_data, main_docx_data, outline_bibliography_txt_data, outline_bibliography_docx_data, st.session_state['audio_bytes'], pdf_filename, main_md_data)
                 
                 st.download_button(
-                    label="Scarica il Riassunto e l'Audio come .zip",
+                    label="Scarica il Riassunto, l'Outline, la Bibliografia e l'Audio come .zip",
                     data=zip_data,
-                    file_name=f"{pdf_filename}_riassunto_audio.zip",
+                    file_name=f"{pdf_filename}_riassunto_outline_audio.zip",
                     mime="application/zip"
                 )
-                logger.info(f"Riassunto e audio esportati come {pdf_filename}_riassunto_audio.zip.")
+                logger.info(f"Riassunto, outline, bibliografia e audio esportati come {pdf_filename}_riassunto_outline_audio.zip.")
 
 if __name__ == "__main__":
    pdf_summary()

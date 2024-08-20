@@ -10,6 +10,8 @@ from tool.pdf_summary import pdf_summary
 from tool.pdf_summary_a import pdf_summary_a
 from tool.savickas_interview import savickas_interview
 from tool.open_question import open_question
+from utilizzo.uso import get_uso
+from utilizzo.consigli import get_consigli
 from mostra_indici import mostra_indici_disponibili
 from tool.voce import voce
 
@@ -21,7 +23,7 @@ def display_main_menu():
     Display the main menu in the sidebar and return the selected page.
     """
     # Define the main menu options
-    menu_options = ["Home", "Amministrazione", "Interrogazione db indicizzato", "Tool"]
+    menu_options = ["Home", "Come si usa", "Amministrazione", "Interrogazione db indicizzato", "Tool"]
 
     # Display the main menu and capture the selection
     selected_page = st.sidebar.selectbox(" ", menu_options)
@@ -40,7 +42,12 @@ def display_sub_menu(selected_page):
         sub_page = st.sidebar.selectbox("Seleziona una funzione:", sub_page_options)
         
         mostra_indici_disponibili()
-
+    
+    elif selected_page == "Come si usa":
+        sub_page_options = ["Primo utilizzo","Consigli"]
+        sub_page = st.sidebar.selectbox("Seleziona:", sub_page_options)
+    
+        
     elif selected_page == "Interrogazione db indicizzato":
         sub_page_options = ["Openai","Anthropic"]
         sub_page = st.sidebar.selectbox("Seleziona:", sub_page_options)
@@ -55,7 +62,19 @@ def display_sub_menu(selected_page):
 def mostra_home():
     st.title("Edubot")
     st.write(get_description())
+    
+def mostra_come_si_usa():
+    st.title("Come si usa")
+   
+    # Mostra il sottomenu per "Come si usa"
+    selected_subpage = display_sub_menu("Come si usa")
 
+    # Mostra solo la funzione corretta per la sottopagina selezionata
+    if selected_subpage == "Primo utilizzo":
+        get_uso()
+    elif selected_subpage == "Consigli":
+        get_consigli()
+        
 def mostra_amministrazione():
     st.title("Amministrazione")
    
@@ -113,6 +132,8 @@ def main():
     if selected_page == "Home":
         mostra_home()
         mostra_indici_disponibili()
+    elif selected_page == "Come si usa":
+        mostra_come_si_usa() 
     elif selected_page == "Amministrazione":
         mostra_amministrazione()
     elif selected_page == "Interrogazione db indicizzato":

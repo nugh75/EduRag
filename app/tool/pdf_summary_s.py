@@ -123,13 +123,12 @@ def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temp
         2. Identifica i punti chiave e le informazioni principali.
         3. Crea un riassunto che catturi l'essenza del testo originale.
         4. Assicurati che il riassunto sia fluido e coeso, evitando frasi introduttive come "il testo discute" o "il documento descrive" o "Il testo analizza".
-        5. Mantieni un tono neutro e oggettivo, usa uno stile accademico. Mantieni in termini tecnici in lingua originale. Speiga sempre gli acronimi. Spiega in maniere semplice i concetti che sono nel testo quando rilevanti per la comprensione.
+        5. Spiega passaggio dopo passaggio i termini più difficili. Tieni conoto che il riassunto è rivolto ad una persona che non consce l'argomento
         6. Il riassunto dovrebbe essere significativamente più breve del testo originale: non più di un quarto della lunghezza originale.
         7. Metti in evidenza definizioni ed esempi.
         8. Considera il contesto fornito dai blocchi precedente e successivo per garantire continuità e coerenza.
         - Testo precedente: {{previous_chunk}}
         - Testo successivo: {{next_chunk}}
-        9. riporta senza cambiarle tutte le citazioni bibliografiche.
         """),
         ("human", "{input}")
     ])
@@ -163,13 +162,12 @@ def enhance_text_with_headings(summarized_text, model_choice, temperature, opena
         Per migliorare il testo, segui queste linee guida:
 
         1. Leggi attentamente il testo riassunto.
-        2. Identifica le sezioni principali e aggiungi titoli e sottotitoli descrittivi. Usa come main sezioni:introduzione, letteratura, obbiettivi, metodologia, risultati, discussione, risultati
+        2. Identifica le sezioni principali e aggiungi titoli e sottotitoli descrittivi.
         3. Assicurati che il testo sia fluido, coeso e ben organizzato.
         4. Mantieni un tono neutro e oggettivo, usa uno stile accademico.
         5. Metti in **grassetto** le definizioni.
         6. Metti in *corsivo* gli esempi.
         7. riporta i dati in maniera descrittiva e discorsiva
-        8. metti tutte le citazioni bibliografiche alla fine in stile APA. Assicurati che ci siano gli autori, l'anno di pubblicazione, la casa editrice e il luogo della casa editrice, la rivista e gli editori. Non è detto che ci siano tutti questi.
         """),
         ("human", "{input}")
     ])
@@ -214,7 +212,7 @@ def create_zip_file(txt_data, docx_data, audio_data, pdf_filename):
     logger.info("Zip file created successfully.")
     return zip_buffer
 
-def pdf_summary_a():
+def pdf_summary_s():
     st.write("### Strumento per Riassumere ed Esportare PDF e Audio")
     
     # Upload PDF file
@@ -304,4 +302,4 @@ def pdf_summary_a():
             logger.info(f"Riassunto e audio esportati come {pdf_filename}_riassunto_audio.zip.")
 
 if __name__ == "__main__":
-   pdf_summary_a()
+   pdf_summary_s()
