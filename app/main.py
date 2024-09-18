@@ -60,7 +60,7 @@ def display_sub_menu(selected_page):
 
 # Define functions for each page and subpage
 def mostra_home():
-    st.title("EduRAG")
+    st.title("EduRag")
     st.write(get_description())
     
 def mostra_come_si_usa():
