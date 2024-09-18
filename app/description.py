@@ -64,7 +64,7 @@ Invece per l'indicizzazione Edubot utilizza **Facebook AI Similarity Search** (F
   - Creazioni di domande aperte e loro correzione
   - Funzioni di orientamento, come l'intervista Savickas.
 
-A secondo del tipo di interazione con Edubot è possibile scaricare un file in formato txt o doc della conversazione. Inoltre, è possibile anche avere un file audio mp3 
+A secondo del tipo di interazione con EduRag è possibile scaricare un file in formato txt o doc della conversazione. Inoltre, è possibile anche avere un file audio mp3 
 
     """
     return description
