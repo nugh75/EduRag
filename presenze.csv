@@ -1,0 +1,11 @@
+nome,cognome,lezione,data_lezione,ora_inizio,tipo_lezione,ora,codice_lezione
+Mario,Rossi,Roma,20/08/2024,18:08:56,Disciplinare,2.0,
+Mario,Rossi,gioanna,20/08/2024,18:36:33,Disciplinare,2.0,
+Daniele,Dragoni,fisica,20/08/2024,18:08:56,Trasversale,2.0,
+Mario,Rossi,calcio,20/08/2024,19:36:25,Disciplinare,1.0,
+Daniele,Dragoni,calcio,20/08/2024,19:36:25,Disciplinare,1.0,
+Daniele,Dragoni,calcio,20/08/2024,19:37:19,Trasversale,1.0,
+Mario,Rossi,marco,20/08/2024,22:20,Disciplinare,1.0,
+Mario,Rossi,fanto,20/08/2024,22:33,Disciplinare,2.0,
+Mario,Rossi,galvani,20/08/2024,22:46,Disciplinare,1.0,
+Mario,Rossi,giovanni,20/08/2024,23:04,Disciplinare,2.0,616B68
