@@ -7,7 +7,7 @@ def get_description():
     """
     description = """
     
-### Perché Edubot
+### Perché EduRag
 
 Negli ultimi anni, i **Large Language Models** (LLM), come GPT di OpenAI, sono diventati parte integrante della nostra vita. Questi modelli possono generare testo e interagire in linguaggio naturale, svolgendo compiti complessi in modo efficace. Gli LLM possono essere utili nello studio in molti modi:
 
@@ -37,7 +37,7 @@ Negli ultimi anni, i **Large Language Models** (LLM), come GPT di OpenAI, sono d
 Tuttavia, c'è il rischio che gli studenti li usino per completare i compiti senza comprenderli, e di fatto non mettino in atto quell'apprendimento attivo che è molto importante nello studio.
 
 
-### Il progetto Edubot
+### Il progetto EduRag
 Il progetto Edubot si propone di affrontare le sfide legate all'uso dei LLMs nell'istruzione, offrendo un esempio di approccio responsabile. Edubot ha l'obiettivo di sviluppare un chatbot didattico che supporti gli studenti nel loro apprendimento, non semplicemente fornendo risposte, ma guidandoli a comprendere e approfondire i contenuti. L'idea è di promuovere un apprendimento attivo e consapevole, integrando la tecnologia in modo etico e rispettoso delle metodologie pedagogiche moderne.
 
 ### Come è fatto Edubot e quali sono le tecnologie alla base
@@ -54,7 +54,7 @@ Alla base di Edubot vi sono due tecnologie chiave: **embedding** e **Retrieval-A
 Un aspetto cruciale nell'elaborazione del testo è la creazione di segmenti specifici, detti **chunk**, che possono essere embeddati e indicizzati per il recupero tramite la tecnologia RAG (Retrieval-Augmented Generation). Per suddividere il testo in questi chunk, Edubot utilizza Character Text Splitter, una funzionalità di LangChain progettata per dividere il testo rispettando delimitatori naturali come paragrafi e frasi, garantendo così una segmentazione coerente e efficace.
 Invece per l'indicizzazione Edubot utilizza **Facebook AI Similarity Search** (FAISS), sviluppata da Facebook AI Research. Questa libreriaè progettata per la ricerca e il recupero rapido di vettori simili all'interno di grandi collezioni di dati.Inoltre è ottimizzata per funzionare sia su CPU che su GPU, FAISS assicura prestazioni elevate e una notevole efficienza nel processo di ricerca. 
 
-### Cosa fa Edubot
+### Cosa fa EduRag
 
  **Funzione principale**: Edubot è progettato per creare database indicizzati di documenti in formato PDF, DOC, TXT, che possono includere articoli scientifici, appunti personali, e molto altro, consentendo poi di effettuare interrogazioni su di essi.
 
@@ -64,7 +64,7 @@ Invece per l'indicizzazione Edubot utilizza **Facebook AI Similarity Search** (F
   - Creazioni di domande aperte e loro correzione
   - Funzioni di orientamento, come l'intervista Savickas.
 
-A secondo del tipo di interazione con Edubot è possibile scaricare un file in formato txt o doc della conversazione. Inoltre, è possibile anche avere un file audio mp3 
+A secondo del tipo di interazione con EduRag è possibile scaricare un file in formato txt o doc della conversazione. Inoltre, è possibile anche avere un file audio mp3 
 
     """
     return description

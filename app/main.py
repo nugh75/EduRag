@@ -8,7 +8,7 @@ from query_database.query_gpt import query_db_gpt4
 from query_database.query_claude import query_db_claude
 from tool.pdf_summary import pdf_summary
 from tool.pdf_summary_a import pdf_summary_a
-from tool.savickas_interview import savickas_interview
+#from tool.savickas_interview import savickas_interview
 from tool.open_question import open_question
 from utilizzo.uso import get_uso
 from utilizzo.consigli import get_consigli
@@ -60,7 +60,7 @@ def display_sub_menu(selected_page):
 
 # Define functions for each page and subpage
 def mostra_home():
-    st.title("Edubot")
+    st.title("EduRag")
     st.write(get_description())
     
 def mostra_come_si_usa():
@@ -113,8 +113,8 @@ def mostra_tool():
         pdf_summary()
     elif selected_subpage == "Riassunto PDF articoli scientifici":
         pdf_summary_a()
-    elif selected_subpage == "Intervista Savickas":
-        savickas_interview()
+  #  elif selected_subpage == "Intervista Savickas":
+   #     savickas_interview()
     elif selected_subpage == "Domande aperte":
         open_question()
     elif selected_subpage == "TTS Edge":
