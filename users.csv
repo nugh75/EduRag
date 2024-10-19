@@ -1,5 +1,0 @@
-nome,cognome,email,password,ruolo,classe_concorso,confermato
-Mario,Rossi,mario.rossi@scuola.it,pass123,Studente,,True
-Luca,Bianchi,luca.bianchi@scuola.it,pass456,Studente,,True
-Giulia,Verdi,giulia.verdi@scuola.it,pass789,Studente,,True
-Professore,Docente,professore.docente@scuola.it,admin123,Insegnante,,True
