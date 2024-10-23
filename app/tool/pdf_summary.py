@@ -154,20 +154,38 @@ def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temp
     
     template = ChatPromptTemplate.from_messages([
         ("system", f"""
-        Sei un assistente AI specializzato nel riassumere testi in {language}. Il tuo compito è creare un riassunto conciso, fluido e coeso del testo fornito.
+        Sei un assistente AI specializzato nel analizzare testi in {language}. 
+        
+        Riassumi i testi in modo chiaro e conciso, mantenendo i punti principali e l'essenza del contenuto originale.
 
-        Per creare il riassunto, segui queste linee guida:
+# Steps
 
-        1. Leggi attentamente l'intero testo.
-        2. Identifica i punti chiave e le informazioni principali.
-        3. Crea un riassunto che catturi l'essenza del testo originale.
-        4. Assicurati che il riassunto sia fluido e coeso, evitando frasi introduttive come "il testo discute" o "il documento descrive" o "Il testo analizza".
-        5. Mantieni un tono neutro e oggettivo, usa uno stile accademico. Mantieni i termini tecnici in lingua originale. Spiega sempre gli acronimi.
-        6. Il riassunto dovrebbe essere significativamente più breve del testo originale: non più di un terzo della lunghezza originale.
-        7. Metti in evidenza definizioni ed esempi.
-        8. Considera il contesto fornito dai blocchi precedente e successivo per garantire continuità e coerenza.
-        - Testo precedente: {{previous_chunk}}
-        - Testo successivo: {{next_chunk}}
+1. Leggi il testo originale attentamente.
+2. Identifica i punti principali e le idee centrali.
+3. Elimina i dettagli superflui e la ridondanza.
+4. Riformula le informazioni rilevanti in un linguaggio semplice e diretto.
+5. Assicurati che il riassunto rispecchi fedelmente il significato del testo originale.
+
+# Output Format
+
+Un breve paragrafo che riassume il testo originale, contenente le idee principali in forma chiara e concisa.
+
+# Examples
+
+**Input:**
+"Il mondo accademico sta affrontando una rivoluzione digitale, con sempre più università che adottano tecnologie avanzate per migliorare l'apprendimento e la ricerca. Tuttavia, ci sono preoccupazioni riguardanti la privacy e la sicurezza dei dati. Nonostante queste sfide, i benefici dell'innovazione tecnologica nel campo dell'istruzione stanno avendo un impatto positivo a lungo termine."
+
+**Output:**
+Le università stanno sempre più integrando le tecnologie digitali per migliorare l'apprendimento, nonostante le preoccupazioni di privacy e sicurezza. L'innovazione, comunque, offre un impatto positivo a lungo termine su istruzione e ricerca.
+
+# Notes
+
+- Mantieni il tono neutrale e oggettivo.
+- Assicurati che il riassunto sia accessibile e comprensibile per un pubblico ampio.
+- Fai attenzione a non introdurre nuove informazioni o opinioni personali.
+- Considera il contesto fornito dai blocchi precedente e successivo per garantire continuità e coerenza.
+- Testo precedente: {{previous_chunk}}
+- Testo successivo: {{next_chunk}}
         """),
         ("human", "{input}")
     ])
@@ -205,17 +223,38 @@ def enhance_text_with_headings(summarized_text, model_choice, temperature, opena
         
         template = ChatPromptTemplate.from_messages([
             ("system", f"""
-            Sei un assistente AI specializzato nel migliorare testi riassunti e aggiungere titoli appropriati su due livelli in {language}. Il tuo compito è rivedere il testo fornito, migliorarlo, inserire titoli che riflettano il contenuto di ciascuna sezione ed espandendo ogni sezione.
+            Sei un assistente AI specializzato nel migliorare testi riassunti  in {language}.
 
-            Per migliorare il testo, segui queste linee guida:
+            Correggi la struttura e il lessico di un testo fornito in italiano.
 
-            1. Leggi attentamente il testo riassunto.
-            2. Identifica le sezioni principali e aggiungi titoli e sottotitoli descrittivi.
-            3. Assicurati che il testo sia fluido, coeso e ben organizzato.
-            4. Mantieni un tono neutro e oggettivo. Sii sempre discorsivo e evita bullet point.
-            5. Metti in grassetto le definizioni.
-            6. Metti in corsivo gli esempi.
-            7. Non includere tabelle o immagini nel file audio.
+Esamina il testo per errori grammaticali, sintattici o lessicali, e apporta le modifiche necessarie per garantire chiarezza e scorrevolezza. Considera anche il tono e lo stile del testo, facendo attenzione a mantenere o adattare lo stile in base al contesto e al pubblico di riferimento.
+
+# Steps
+
+1. Leggi attentamente il testo per comprendere il suo significato e il messaggio che vuole trasmettere.
+2. Identifica gli errori grammaticali, di sintassi, o lessicali.
+3. Valuta la scorrevolezza e la coerenza del testo.
+4. Effettua le correzioni necessarie, includendo miglioramenti alla struttura delle frasi e al vocabolario utilizzato.
+5. Verifica che il tono e lo stile siano appropriati per il pubblico target, apportando aggiustamenti se necessario.
+
+# Output Format
+
+Produci una versione corretta e migliorata del testo, rispettando il formato e la lunghezza del testo originale. Indica con chiarezza eventuali modifiche effettuate rispetto all'originale.
+
+# Examples
+
+**Input:**  
+"Questa é una esempio di testo che necessita correzione, infatti ci sono diversi errori grammatici e sintattici."
+
+**Output:**  
+"Questo è un esempio di testo che necessita di correzione; infatti, ci sono diversi errori grammaticali e sintattici."
+
+(Nota: gli esempi devono essere rappresentativi, ma i testi reali potrebbero essere più lunghi e complessi. Assicurati di applicare la stessa logica di revisione.)
+
+# Notes
+
+- Fai attenzione a non alterare il significato originale del testo.
+- Considera le varianti regionali o stilistiche nel caso siano rilevanti.
             """),
             ("human", "{input}")
         ])
