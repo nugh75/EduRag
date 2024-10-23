@@ -12,6 +12,8 @@ import tempfile
 import asyncio
 import re
 import tiktoken  # For token estimation
+import nltk  # For text processing
+nltk.download('punkt')
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -81,7 +83,7 @@ def openai_m():
         return None, None, None, None, None
 
     # Select the LLM model to use
-    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4", "gpt-3.5-turbo"], index=0)
+    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=0)
     st.session_state.model_choice = model_choice
     logger.debug(f"Model choice selected: {model_choice}")
 
@@ -179,27 +181,34 @@ def upload_and_extract_text():
         logger.debug("No file uploaded")
         return None, None
 
+# Identify sections based on headings
+def split_text_by_headings(text, language="Italian"):
+    logger.debug("Splitting text by headings")
+    # Regular expression patterns for headings
+    if language == "Italian":
+        heading_patterns = [
+            r'\n([A-Z][^\n]{0,100})\n',  # Lines with capitalized words
+            r'\nCapitolo\s+\d+[:.\s]',   # Lines starting with "Capitolo X"
+            r'\n[A-Z ]+\n',              # Lines with uppercase letters
+        ]
+    else:
+        heading_patterns = [
+            r'\n([A-Z][^\n]{0,100})\n',  # Similar patterns for other languages
+        ]
+
+    # Combine patterns
+    combined_pattern = '|'.join(heading_patterns)
+    sections = re.split(combined_pattern, text)
+    # Filter out empty strings
+    sections = [s.strip() for s in sections if s.strip()]
+    logger.info(f"Identified {len(sections)} sections based on headings")
+    return sections
+
 # Estimate the token count of a text
-def calculate_token_count(text, model_name="gpt-3.5-turbo"):
+def calculate_token_count(text, model_name="gpt-4o"):
     encoding = tiktoken.encoding_for_model(model_name)
     num_tokens = len(encoding.encode(text))
     return num_tokens
-
-# Split the text into chunks based on token limits
-def split_text_into_chunks(text, max_tokens_per_chunk, model_name):
-    logger.debug(f"Splitting text into chunks with a maximum of {max_tokens_per_chunk} tokens per chunk")
-    encoding = tiktoken.encoding_for_model(model_name)
-    tokens = encoding.encode(text)
-    chunks = []
-    start = 0
-    while start < len(tokens):
-        end = start + max_tokens_per_chunk
-        chunk_tokens = tokens[start:end]
-        chunk_text = encoding.decode(chunk_tokens)
-        chunks.append(chunk_text)
-        logger.info(f"Chunk created with token count {len(chunk_tokens)}")
-        start = end
-    return chunks
 
 # Generate an outline from the text
 def generate_outline(text, model_choice, temperature, openai_api_key, language="Italian", custom_prompt=""):
@@ -259,13 +268,14 @@ def summarize_and_revise(outline, text, model_choice, temperature_summary, tempe
     # Step 1: Generate the initial summary based on the outline
     template_summary = ChatPromptTemplate.from_messages([
         ("system", f"""
-Sei un assistente AI specializzato nel creare riassunti in {language}. Utilizza l'outline fornito per scrivere un riassunto dettagliato che segue la struttura dell'outline.
+Sei un assistente AI specializzato nel creare riassunti in {language}. Il tuo compito è scrivere un riassunto del testo fornito che sia circa un quarto della lunghezza originale. Usa l'outline fornito per guidare il riassunto, assicurandoti che ogni sezione sia coperta.
 
 Ecco le istruzioni:
 
-1. Usa l'outline per guidare il riassunto, assicurandoti che ogni sezione sia coperta.
+1. Usa l'outline per guidare il riassunto, coprendo ogni sezione.
 2. Mantieni il riassunto chiaro, coeso e uniforme nello stile.
 3. Assicurati che il riassunto sia comprensibile anche a lettori non esperti dell'argomento.
+4. Il riassunto dovrebbe essere circa un quarto della lunghezza del testo originale.
 
 Incorpora il seguente contesto aggiuntivo se necessario:
 
@@ -286,13 +296,13 @@ Incorpora il seguente contesto aggiuntivo se necessario:
     # Step 2: Revise the summary
     template_revision = ChatPromptTemplate.from_messages([
         ("system", f"""
-Sei un assistente AI specializzato nella revisione di testi in {language}. Il tuo compito è migliorare il riassunto fornito, assicurandoti che sia coeso, chiaro e ben strutturato. Correggi eventuali errori, migliora la fluidità, semplifica frasi complesse e rimuovi ambiguità. Garantisci che il riassunto rispecchi accuratamente il contenuto originale.
+Sei un assistente AI specializzato nella revisione di testi in {language}. Il tuo compito è migliorare il riassunto fornito, assicurandoti che sia coeso, chiaro e ben strutturato. Correggi eventuali errori, migliora la fluidità, semplifica frasi complesse e rimuovi ambiguità. Garantisci che il riassunto rispecchi accuratamente il contenuto originale e mantenga la lunghezza richiesta.
 
 Ecco le istruzioni:
 
 1. Leggi attentamente il riassunto e confrontalo con l'outline se necessario.
 2. Apporta modifiche per migliorare la chiarezza, la coesione e la uniformità dello stile.
-3. Assicurati che il riassunto sia accurato e rappresenti fedelmente il testo originale.
+3. Assicurati che il riassunto sia accurato, rappresenti fedelmente il testo originale e sia circa un quarto della lunghezza originale.
 
 Incorpora il seguente contesto aggiuntivo se necessario:
 
@@ -333,64 +343,6 @@ def create_txt(text):
     logger.info("TXT file created successfully")
     return buffer
 
-# Combine individual outlines into a final outline
-def combine_outlines(outlines, model_choice, temperature, openai_api_key, language="Italian"):
-    logger.info(f"Combining outlines into a final outline in {language}")
-    llm = ChatOpenAI(
-        model_name=model_choice,
-        temperature=temperature,
-        openai_api_key=openai_api_key
-    )
-
-    combined_outline_text = "\n\n".join(outlines)
-
-    template = ChatPromptTemplate.from_messages([
-        ("system", f"""
-Sei un assistente AI specializzato nel consolidare outline in {language}. Unisci le outline fornite in un'unica outline coesa e ben strutturata con tre livelli di profondità. Mantieni coerenza e uniformità nello stile.
-
-Ecco le outline da unire:
-"""),
-        ("human", "{input}")
-    ])
-
-    chain = template.pipe(llm)
-    response = chain.invoke({
-        "input": combined_outline_text
-    })
-
-    final_outline = response.content.strip()
-    logger.info("Final outline generated.")
-    return final_outline
-
-# Combine individual summaries into a final summary
-def combine_summaries(summaries, model_choice, temperature, openai_api_key, language="Italian"):
-    logger.info(f"Combining summaries into a final summary in {language}")
-    llm = ChatOpenAI(
-        model_name=model_choice,
-        temperature=temperature,
-        openai_api_key=openai_api_key
-    )
-
-    combined_summary_text = "\n\n".join(summaries)
-
-    template = ChatPromptTemplate.from_messages([
-        ("system", f"""
-Sei un assistente AI specializzato nel creare riassunti coesi in {language}. Unisci i riassunti forniti in un unico riassunto fluido e ben strutturato. Mantieni coerenza e uniformità nello stile.
-
-Ecco i riassunti da unire:
-"""),
-        ("human", "{input}")
-    ])
-
-    chain = template.pipe(llm)
-    response = chain.invoke({
-        "input": combined_summary_text
-    })
-
-    final_summary = response.content.strip()
-    logger.info("Final summary generated.")
-    return final_summary
-
 # Main function to summarize the uploaded text file and generate outline
 def pdf_summary():
     logger.info("Starting PDF summary process")
@@ -412,32 +364,36 @@ def pdf_summary():
 
         # Start the summarization process when the button is pressed
         if st.button("Avvia il processo di riassunto e outline"):
-            # Estimate token count and adjust chunk size
-            max_tokens_model = 4096 if model_choice == "gpt-3.5-turbo" else 8192
-            max_tokens_per_chunk = max_tokens_model - 1000  # Reserve tokens for prompts and responses
-
-            chunks = split_text_into_chunks(text, max_tokens_per_chunk, model_choice)
+            # Split text based on headings
+            sections = split_text_by_headings(text, language=language)
             outlines = []
             summaries = []
 
-            # Generate outline and summary for each chunk
-            for idx, chunk in enumerate(chunks):
+            # Generate outline and summary for each section
+            for idx, section in enumerate(sections):
                 try:
-                    # Generate the outline for each chunk
-                    outline = generate_outline(chunk, model_choice, temperature_summary, openai_api_key, language=language, custom_prompt=custom_prompt)
+                    # Calculate the desired summary length
+                    original_length = len(section)
+                    desired_summary_length = original_length // 4
+                    logger.info(f"Section {idx + 1} original length: {original_length} characters. Desired summary length: {desired_summary_length} characters.")
+
+                    # Generate the outline for each section
+                    outline = generate_outline(section, model_choice, temperature_summary, openai_api_key, language=language, custom_prompt=custom_prompt)
                     outlines.append(outline)
                     # Generate the summary based on the outline and revise it
-                    summary = summarize_and_revise(outline, chunk, model_choice, temperature_summary, temperature_revision, openai_api_key, language=language, custom_prompt=custom_prompt)
+                    summary = summarize_and_revise(outline, section, model_choice, temperature_summary, temperature_revision, openai_api_key, language=language, custom_prompt=custom_prompt)
+                    # Truncate or extend summary to match desired length
+                    summary = adjust_summary_length(summary, desired_summary_length)
                     summaries.append(summary)
-                    logger.info(f"Chunk {idx + 1} processed successfully.")
+                    logger.info(f"Section {idx + 1} processed successfully.")
                 except Exception as e:
-                    logger.error(f"Error processing chunk {idx + 1}: {e}")
-                    st.error(f"Errore durante la generazione per il chunk {idx + 1}.")
+                    logger.error(f"Error processing section {idx + 1}: {e}")
+                    st.error(f"Errore durante la generazione per la sezione {idx + 1}.")
                     return
 
             # Combine outlines and summaries into final versions
-            final_outline = combine_outlines(outlines, model_choice, temperature_revision, openai_api_key, language=language)
-            final_summary = combine_summaries(summaries, model_choice, temperature_revision, openai_api_key, language=language)
+            final_outline = "\n\n".join(outlines)
+            final_summary = "\n\n".join(summaries)
 
             # Display the final outline
             st.write("### Outline Generato:")
@@ -459,6 +415,21 @@ def pdf_summary():
             st.download_button("Scarica l'Outline (TXT)", outline_txt.getvalue(), f"{file_basename}_outline.txt", "text/plain")
             st.download_button("Scarica il Riassunto (TXT)", summary_txt.getvalue(), f"{file_basename}_riassunto.txt", "text/plain")
             logger.info("Outline and summary files generated and ready for download.")
+
+# Function to adjust the summary length
+def adjust_summary_length(summary, desired_length):
+    current_length = len(summary)
+    if current_length > desired_length:
+        # Truncate the summary to the desired length
+        summary = summary[:desired_length]
+        # Ensure we don't cut off mid-sentence
+        if '.' in summary:
+            summary = '.'.join(summary.split('.')[:-1]) + '.'
+    elif current_length < desired_length:
+        # If the summary is too short, we might need to regenerate or expand it
+        # For now, we can return the summary as is
+        pass
+    return summary
 
 # Run the main function if the script is executed
 def main():
