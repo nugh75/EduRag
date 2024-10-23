@@ -1,0 +1,5 @@
+Descrizione dell'indice: In questo DB è possibile fare delle domande sul manuale dell'esame della professoressa Poggi. Il testo su cui si basa il database è una bozza del manuale di conseguenza bisogna sempre controllare sul manuale. Inolte, le pagini potrebbero essere diverse.
+Titoli dei documenti:
+- Indice
+- Manuale parte I-V
+- Manuale parte VI-X
