@@ -12,8 +12,6 @@ import tempfile
 import asyncio
 import re
 import tiktoken  # For token estimation
-import nltk  # For text processing
-nltk.download('punkt')
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -343,6 +341,21 @@ def create_txt(text):
     logger.info("TXT file created successfully")
     return buffer
 
+# Function to adjust the summary length
+def adjust_summary_length(summary, desired_length):
+    current_length = len(summary)
+    if current_length > desired_length:
+        # Truncate the summary to the desired length
+        summary = summary[:desired_length]
+        # Ensure we don't cut off mid-sentence
+        if '.' in summary:
+            summary = '.'.join(summary.split('.')[:-1]) + '.'
+    elif current_length < desired_length:
+        # If the summary is too short, we might need to regenerate or expand it
+        # For now, we can return the summary as is
+        pass
+    return summary
+
 # Main function to summarize the uploaded text file and generate outline
 def pdf_summary():
     logger.info("Starting PDF summary process")
@@ -415,21 +428,6 @@ def pdf_summary():
             st.download_button("Scarica l'Outline (TXT)", outline_txt.getvalue(), f"{file_basename}_outline.txt", "text/plain")
             st.download_button("Scarica il Riassunto (TXT)", summary_txt.getvalue(), f"{file_basename}_riassunto.txt", "text/plain")
             logger.info("Outline and summary files generated and ready for download.")
-
-# Function to adjust the summary length
-def adjust_summary_length(summary, desired_length):
-    current_length = len(summary)
-    if current_length > desired_length:
-        # Truncate the summary to the desired length
-        summary = summary[:desired_length]
-        # Ensure we don't cut off mid-sentence
-        if '.' in summary:
-            summary = '.'.join(summary.split('.')[:-1]) + '.'
-    elif current_length < desired_length:
-        # If the summary is too short, we might need to regenerate or expand it
-        # For now, we can return the summary as is
-        pass
-    return summary
 
 # Run the main function if the script is executed
 def main():
