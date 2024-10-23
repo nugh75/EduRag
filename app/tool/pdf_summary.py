@@ -4,14 +4,14 @@ from io import BytesIO
 import streamlit as st
 import PyPDF2
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
 from docx import Document
-import zipfile
 import edge_tts
 import tempfile
 import asyncio
 import re
+import tiktoken  # For token estimation
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -63,7 +63,7 @@ def openai_m():
     logger.debug("Fetching OpenAI API settings from user")
     # Choose between using system API key or a user-provided key
     api_choice = st.sidebar.selectbox("Scegli la chiave API da usare", ["Usa chiave di sistema", "Inserisci la tua chiave API"], index=1)
-    
+
     if api_choice == "Inserisci la tua chiave API":
         # Get the user's API key from sidebar input
         openai_api_key = st.sidebar.text_input("Inserisci la tua chiave API OpenAI", st.session_state.get("user_api_key", ""), type="password")
@@ -73,7 +73,7 @@ def openai_m():
         # Load the system API key from environment variables
         openai_api_key = os.getenv("OPENAI_API_KEY")
         logger.debug("System OpenAI API key retrieved")
-    
+
     # If no API key is provided, display an error message
     if not openai_api_key:
         logger.error("No OpenAI API key provided")
@@ -81,21 +81,23 @@ def openai_m():
         return None, None, None, None, None
 
     # Select the LLM model to use
-    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4o", "gpt-4o-mini"], index=1)
+    model_choice = st.sidebar.selectbox("Seleziona il modello LLM", ["gpt-4", "gpt-3.5-turbo"], index=0)
     st.session_state.model_choice = model_choice
     logger.debug(f"Model choice selected: {model_choice}")
-    
+
     # Set the temperature for model response
-    temperature = st.sidebar.slider("Imposta la temperatura del modello", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
-    st.session_state.temperature = temperature
-    logger.debug(f"Temperature set to: {temperature}")
+    temperature_summary = st.sidebar.slider("Imposta la temperatura per il riassunto", min_value=0.0, max_value=1.0, value=0.5, step=0.1)
+    temperature_revision = st.sidebar.slider("Imposta la temperatura per la revisione", min_value=0.0, max_value=1.0, value=0.3, step=0.1)
+    st.session_state.temperature_summary = temperature_summary
+    st.session_state.temperature_revision = temperature_revision
+    logger.debug(f"Temperatures set to: summary={temperature_summary}, revision={temperature_revision}")
 
     # Select the language and speaker for TTS
     language = st.sidebar.selectbox("Seleziona la lingua per il riassunto e l'audio", ["Italian", "English", "Swedish"])
     speaker = st.sidebar.selectbox("Seleziona la voce per l'audio", list(language_dict[language].keys()))
     logger.debug(f"Language selected: {language}, Speaker selected: {speaker}")
 
-    return openai_api_key, model_choice, temperature, language, speaker
+    return openai_api_key, model_choice, temperature_summary, temperature_revision, language, speaker
 
 # Extract text from a PDF file
 def extract_text_from_pdf(reader):
@@ -109,13 +111,13 @@ def extract_text_from_pdf(reader):
             logger.debug(f"Extracted text from page {page_num}: {page_text[:100]}...")
     return text
 
-# Extract text from a DOC file
-def extract_text_from_doc(doc_file):
-    logger.info("Extracting text from DOC file.")
+# Extract text from a DOCX file
+def extract_text_from_docx(doc_file):
+    logger.info("Extracting text from DOCX file.")
     doc = Document(doc_file)
     # Join paragraphs with non-empty content
     text = "\n\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-    logger.debug(f"Extracted text from DOC file: {text[:100]}...")
+    logger.debug(f"Extracted text from DOCX file: {text[:100]}...")
     return text
 
 # Extract text from a TXT file
@@ -132,10 +134,8 @@ def clean_markdown_formatting(text):
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
     # Remove italic formatting (*text*)
     text = re.sub(r'\*(.*?)\*', r'\1', text)
-    # Remove second-level headers (## Header)
-    text = re.sub(r'\#\#(.*?)\n', r'\1\n', text)
-    # Remove first-level headers (# Header)
-    text = re.sub(r'\#(.*?)\n', r'\1\n', text)
+    # Remove headers (# Header)
+    text = re.sub(r'#+\s*(.*?)\n', r'\1\n', text)
     # Remove bullet points (- or *)
     text = re.sub(r'[-*]\s', '', text)
     logger.debug(f"Cleaned text: {text[:100]}...")
@@ -150,7 +150,7 @@ def upload_and_extract_text():
     if uploaded_file is not None:
         # Determine the file type
         file_type = uploaded_file.name.split('.')[-1].lower()
-        pdf_filename = os.path.splitext(uploaded_file.name)[0]
+        file_basename = os.path.splitext(uploaded_file.name)[0]
         logger.info(f"Uploaded file: {uploaded_file.name}")
 
         # Extract text based on file type
@@ -158,7 +158,7 @@ def upload_and_extract_text():
             reader = PyPDF2.PdfReader(uploaded_file)
             text = extract_text_from_pdf(reader)
         elif file_type == "docx":
-            text = extract_text_from_doc(uploaded_file)
+            text = extract_text_from_docx(uploaded_file)
         elif file_type == "txt":
             text = extract_text_from_txt(uploaded_file)
         else:
@@ -174,169 +174,142 @@ def upload_and_extract_text():
 
         logger.info("Text extraction completed.")
         # Clean the extracted text and return it
-        return clean_markdown_formatting(text), pdf_filename
+        return clean_markdown_formatting(text), file_basename
     else:
         logger.debug("No file uploaded")
         return None, None
 
-# Split the text into chunks for easier processing
-def split_text_into_chunks(text, num_chunks):
-    logger.debug(f"Splitting text into {num_chunks} chunks")
-    # Calculate the size of each chunk, ensuring it's at least 1 character
-    chunk_size = max(1, len(text) // num_chunks)
+# Estimate the token count of a text
+def calculate_token_count(text, model_name="gpt-3.5-turbo"):
+    encoding = tiktoken.encoding_for_model(model_name)
+    num_tokens = len(encoding.encode(text))
+    return num_tokens
+
+# Split the text into chunks based on token limits
+def split_text_into_chunks(text, max_tokens_per_chunk, model_name):
+    logger.debug(f"Splitting text into chunks with a maximum of {max_tokens_per_chunk} tokens per chunk")
+    encoding = tiktoken.encoding_for_model(model_name)
+    tokens = encoding.encode(text)
     chunks = []
     start = 0
-    
-    for i in range(num_chunks):
-        end = start + chunk_size
-        # Ensure the last chunk captures any remaining text
-        if i == num_chunks - 1:
-            end = len(text)
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
+    while start < len(tokens):
+        end = start + max_tokens_per_chunk
+        chunk_tokens = tokens[start:end]
+        chunk_text = encoding.decode(chunk_tokens)
+        chunks.append(chunk_text)
+        logger.info(f"Chunk created with token count {len(chunk_tokens)}")
         start = end
-        logger.info(f"Chunk {i+1} created with length {len(chunk)}: {chunk[:100]}...")
-    
     return chunks
 
-# Summarize a given chunk of text with context from surrounding chunks using Chain of Thought prompting
-def summarize_text_with_context(text, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language="Italian", custom_prompt=""):
-    logger.info(f"Starting text summarization with context in {language}.")
-    logger.debug(f"Summarizing text: {text[:100]}... with prev_chunk: {prev_chunk[:50]}... and next_chunk: {next_chunk[:50]}...")
-    
-    # Create the LLM object
+# Generate an outline from the text
+def generate_outline(text, model_choice, temperature, openai_api_key, language="Italian", custom_prompt=""):
+    logger.info(f"Generating outline in {language}")
     llm = ChatOpenAI(
-        model=model_choice,
+        model_name=model_choice,
         temperature=temperature,
         openai_api_key=openai_api_key
     )
-    
-    # Define the prompt template for summarization using advanced prompt engineering techniques
+
     template = ChatPromptTemplate.from_messages([
         ("system", f"""
-        Sei un assistente AI avanzato. Il tuo compito è riassumere il testo fornito in maniera chiara, concisa, e completa.
-        Utilizzeremo la strategia "Chain of Thought" per garantire che ogni passo del riassunto sia accuratamente elaborato.
+Sei un assistente AI esperto in creazione di outline in {language}. Il tuo compito è creare un outline dettagliato e ben strutturato del testo fornito. L'outline deve avere tre livelli di profondità e riflettere accuratamente la struttura del contenuto.
 
-        ### Passaggi per il Riassunto
-        1. **Comprensione del Testo**: Leggi attentamente il testo fornito. Identifica i concetti principali e le idee centrali. Considera il contesto dei testi precedente e successivo.
-        2. **Catena di Pensieri**: Esprimi passo dopo passo le tue riflessioni sul testo. Inizia descrivendo cosa pensi che siano i punti più importanti e le connessioni logiche tra di essi.
-        3. **Sintesi**: Dopo aver espresso i tuoi pensieri, formula un riassunto completo che includa le idee chiave e che rispetti il flusso del contenuto originale.
-        4. **Azione Come...**: Agisci come un esperto in questo argomento e rendi il riassunto utile anche per chi non ha familiarità con il tema. Mantieni un tono educativo ma accessibile.
-        5. **Elimina Dettagli Superflui**: Rimuovi dettagli non necessari e ridondanze. Privilegia la chiarezza e la precisione.
-        
-        ### Contesto Aggiuntivo
-        - Testo precedente: {prev_chunk}
-        - Testo successivo: {next_chunk}
+Ecco le istruzioni:
 
-        Tieni presente che il tuo obiettivo è produrre un riassunto accurato e utilizzabile, capace di riflettere i principali aspetti del contenuto in maniera chiara, utilizzando la "Catena di Pensieri" per migliorare la qualità della sintesi.
-        """),
+1. Leggi attentamente il testo fornito e identifica i punti principali.
+2. Crea un outline con tre livelli:
+    - **Livello 1**: Principali sezioni o capitoli.
+    - **Livello 2**: Sotto-sezioni o argomenti all'interno delle sezioni principali.
+    - **Livello 3**: Dettagli specifici o sotto-argomenti.
+
+Mantieni coerenza e uniformità nello stile dell'outline. Presenta l'outline in un formato chiaro e organizzato, utilizzando numeri e lettere per indicare i livelli.
+
+Se necessario, incorpora il seguente contesto aggiuntivo:
+
+{custom_prompt}
+"""),
         ("human", "{input}")
     ])
-    
-    # Add custom prompt text if provided
-    if custom_prompt:
-        custom_text = f"\n\n{custom_prompt}"
-        text += custom_text
-        logger.debug(f"Custom prompt added: {custom_prompt}")
-    
-    # Pipe the prompt to the model and generate the response
+
     chain = template.pipe(llm)
     response = chain.invoke({
-        "previous_chunk": prev_chunk,
-        "next_chunk": next_chunk,
         "input": text
     })
-    
-    logger.info(f"Text summarization with context in {language} completed.")
-    logger.debug(f"Summary generated: {response.content[:100]}...")
-    return response.content
 
-# Generate an outline from the summarized text on three levels
-def generate_outline_from_summary(summary):
-    logger.info("Generating outline from summary")
-    outline = ""
-    # Split the summary into sentences or phrases to create structured outline
-    lines = summary.split(". ")
-    level_1 = 1
-    for line in lines:
-        # Use heuristics to identify hierarchical levels, this can be more complex if needed
-        if len(line.split()) > 10:  # Level 1: Main points
-            outline += f"{level_1}. {line.strip()}.\n"
-            level_1 += 1
-            level_2 = 'a'
-        elif len(line.split()) > 5:  # Level 2: Sub-points
-            outline += f"    {level_2}) {line.strip()}.\n"
-            level_2 = chr(ord(level_2) + 1)
-        else:  # Level 3: Minor details
-            outline += f"        - {line.strip()}.\n"
-    logger.info("Outline generation completed")
+    outline = response.content.strip()
+    logger.info(f"Outline generation in {language} completed.")
+    logger.debug(f"Generated outline: {outline[:100]}...")
     return outline
 
-# Main function to summarize the uploaded text file and generate outline
-def pdf_summary():
-    logger.info("Starting PDF summary process")
-    text, pdf_filename = upload_and_extract_text()
-    
-    if text is not None:
-        # Retrieve API key and model settings
-        openai_api_key, model_choice, temperature, language, speaker = openai_m()
-        
-        # If API key or settings are incorrect, display an error
-        if not openai_api_key or not model_choice or temperature is None:
-            st.error("Configurazione non corretta. Verifica la chiave API e le altre impostazioni.")
-            logger.error("Invalid API key or settings")
-            return
-        
-        # Get custom prompt input from user
-        custom_prompt_first = st.text_area("A chi è rivolto il riassunto? ci sono istruzioni particolari che vorresti includere per fare il riassunto? (Riassunto)", "")
-        logger.debug(f"Custom prompt for summary: {custom_prompt_first}")
-        
-        # Determine the number of chunks for splitting the text
-        num_chunks = st.number_input("In quanti pezzi vuoi dividere il testo per il riassunto?", min_value=1, max_value=20, value=5)
-        logger.info(f"Number of chunks selected: {num_chunks}")
+# Summarize the text based on the outline and revise it
+def summarize_and_revise(outline, text, model_choice, temperature_summary, temperature_revision, openai_api_key, language="Italian", custom_prompt=""):
+    logger.info(f"Generating summary based on outline in {language}")
+    llm_summary = ChatOpenAI(
+        model_name=model_choice,
+        temperature=temperature_summary,
+        openai_api_key=openai_api_key
+    )
 
-        # Start the summarization process when the button is pressed
-        if st.button("Avvia il processo di riassunto"):
-            chunks = split_text_into_chunks(text, num_chunks)
-            summarized_text = ""
-            
-            for i, chunk in enumerate(chunks):
-                prev_chunk = chunks[i-1] if i > 0 else ""
-                next_chunk = chunks[i+1] if i < len(chunks) - 1 else ""
+    llm_revision = ChatOpenAI(
+        model_name=model_choice,
+        temperature=temperature_revision,
+        openai_api_key=openai_api_key
+    )
 
-                try:
-                    # Generate the summary for each chunk
-                    summary = summarize_text_with_context(chunk, prev_chunk, next_chunk, model_choice, temperature, openai_api_key, language=language, custom_prompt=custom_prompt_first)
-                    summarized_text += summary + "\n"
-                    logger.info(f"Chunk {i+1} summarized successfully.")
-                except Exception as e:
-                    logger.error(f"Error summarizing chunk {i+1}: {e}")
-                    summarized_text += "Errore durante la generazione del riassunto.\n"
+    # Step 1: Generate the initial summary based on the outline
+    template_summary = ChatPromptTemplate.from_messages([
+        ("system", f"""
+Sei un assistente AI specializzato nel creare riassunti in {language}. Utilizza l'outline fornito per scrivere un riassunto dettagliato che segue la struttura dell'outline.
 
-            # Display the summarized text
-            st.write("### Riassunto Generato:")
-            st.write(summarized_text, unsafe_allow_html=True)
-            
-            # Generate the outline from the summarized text
-            outline_text = generate_outline_from_summary(summarized_text)
-            
-            # Display the outline
-            st.write("### Outline Generato:")
-            st.write(outline_text, unsafe_allow_html=True)
+Ecco le istruzioni:
 
-            # Create and save DOCX and TXT files for the summary and outline
-            summary_docx = create_docx(summarized_text)
-            outline_docx = create_docx(outline_text)
-            summary_txt = create_txt(summarized_text)
-            outline_txt = create_txt(outline_text)
+1. Usa l'outline per guidare il riassunto, assicurandoti che ogni sezione sia coperta.
+2. Mantieni il riassunto chiaro, coeso e uniforme nello stile.
+3. Assicurati che il riassunto sia comprensibile anche a lettori non esperti dell'argomento.
 
-            # Provide download options for the generated files
-            st.download_button("Scarica il Riassunto (DOCX)", summary_docx.getvalue(), f"{pdf_filename}_riassunto.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            st.download_button("Scarica l'Outline (DOCX)", outline_docx.getvalue(), f"{pdf_filename}_outline.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            st.download_button("Scarica il Riassunto (TXT)", summary_txt.getvalue(), f"{pdf_filename}_riassunto.txt", "text/plain")
-            st.download_button("Scarica l'Outline (TXT)", outline_txt.getvalue(), f"{pdf_filename}_outline.txt", "text/plain")
-            logger.info("Summary and outline files generated and ready for download.")
+Incorpora il seguente contesto aggiuntivo se necessario:
+
+{custom_prompt}
+"""),
+        ("human", "Outline:\n{outline}\n\nTesto originale:\n{text}")
+    ])
+
+    chain_summary = template_summary.pipe(llm_summary)
+    response_summary = chain_summary.invoke({
+        "outline": outline,
+        "text": text
+    })
+
+    initial_summary = response_summary.content.strip()
+    logger.info(f"Initial summary generated.")
+
+    # Step 2: Revise the summary
+    template_revision = ChatPromptTemplate.from_messages([
+        ("system", f"""
+Sei un assistente AI specializzato nella revisione di testi in {language}. Il tuo compito è migliorare il riassunto fornito, assicurandoti che sia coeso, chiaro e ben strutturato. Correggi eventuali errori, migliora la fluidità, semplifica frasi complesse e rimuovi ambiguità. Garantisci che il riassunto rispecchi accuratamente il contenuto originale.
+
+Ecco le istruzioni:
+
+1. Leggi attentamente il riassunto e confrontalo con l'outline se necessario.
+2. Apporta modifiche per migliorare la chiarezza, la coesione e la uniformità dello stile.
+3. Assicurati che il riassunto sia accurato e rappresenti fedelmente il testo originale.
+
+Incorpora il seguente contesto aggiuntivo se necessario:
+
+{custom_prompt}
+"""),
+        ("human", "Riassunto iniziale:\n{initial_summary}")
+    ])
+
+    chain_revision = template_revision.pipe(llm_revision)
+    response_revision = chain_revision.invoke({
+        "initial_summary": initial_summary
+    })
+
+    revised_summary = response_revision.content.strip()
+    logger.info(f"Summary revision completed.")
+    logger.debug(f"Revised summary: {revised_summary[:100]}...")
+    return revised_summary
 
 # Create a DOCX file in memory from the given text
 def create_docx(text):
@@ -360,6 +333,133 @@ def create_txt(text):
     logger.info("TXT file created successfully")
     return buffer
 
+# Combine individual outlines into a final outline
+def combine_outlines(outlines, model_choice, temperature, openai_api_key, language="Italian"):
+    logger.info(f"Combining outlines into a final outline in {language}")
+    llm = ChatOpenAI(
+        model_name=model_choice,
+        temperature=temperature,
+        openai_api_key=openai_api_key
+    )
+
+    combined_outline_text = "\n\n".join(outlines)
+
+    template = ChatPromptTemplate.from_messages([
+        ("system", f"""
+Sei un assistente AI specializzato nel consolidare outline in {language}. Unisci le outline fornite in un'unica outline coesa e ben strutturata con tre livelli di profondità. Mantieni coerenza e uniformità nello stile.
+
+Ecco le outline da unire:
+"""),
+        ("human", "{input}")
+    ])
+
+    chain = template.pipe(llm)
+    response = chain.invoke({
+        "input": combined_outline_text
+    })
+
+    final_outline = response.content.strip()
+    logger.info("Final outline generated.")
+    return final_outline
+
+# Combine individual summaries into a final summary
+def combine_summaries(summaries, model_choice, temperature, openai_api_key, language="Italian"):
+    logger.info(f"Combining summaries into a final summary in {language}")
+    llm = ChatOpenAI(
+        model_name=model_choice,
+        temperature=temperature,
+        openai_api_key=openai_api_key
+    )
+
+    combined_summary_text = "\n\n".join(summaries)
+
+    template = ChatPromptTemplate.from_messages([
+        ("system", f"""
+Sei un assistente AI specializzato nel creare riassunti coesi in {language}. Unisci i riassunti forniti in un unico riassunto fluido e ben strutturato. Mantieni coerenza e uniformità nello stile.
+
+Ecco i riassunti da unire:
+"""),
+        ("human", "{input}")
+    ])
+
+    chain = template.pipe(llm)
+    response = chain.invoke({
+        "input": combined_summary_text
+    })
+
+    final_summary = response.content.strip()
+    logger.info("Final summary generated.")
+    return final_summary
+
+# Main function to summarize the uploaded text file and generate outline
+def pdf_summary():
+    logger.info("Starting PDF summary process")
+    text, file_basename = upload_and_extract_text()
+
+    if text is not None:
+        # Retrieve API key and model settings
+        openai_api_key, model_choice, temperature_summary, temperature_revision, language, speaker = openai_m()
+
+        # If API key or settings are incorrect, display an error
+        if not openai_api_key or not model_choice:
+            st.error("Configurazione non corretta. Verifica la chiave API e le altre impostazioni.")
+            logger.error("Invalid API key or settings")
+            return
+
+        # Get custom prompt input from user
+        custom_prompt = st.text_area("Inserisci eventuali istruzioni o contesto aggiuntivo per migliorare l'outline e il riassunto:", "")
+        logger.debug(f"Custom prompt: {custom_prompt}")
+
+        # Start the summarization process when the button is pressed
+        if st.button("Avvia il processo di riassunto e outline"):
+            # Estimate token count and adjust chunk size
+            max_tokens_model = 4096 if model_choice == "gpt-3.5-turbo" else 8192
+            max_tokens_per_chunk = max_tokens_model - 1000  # Reserve tokens for prompts and responses
+
+            chunks = split_text_into_chunks(text, max_tokens_per_chunk, model_choice)
+            outlines = []
+            summaries = []
+
+            # Generate outline and summary for each chunk
+            for idx, chunk in enumerate(chunks):
+                try:
+                    # Generate the outline for each chunk
+                    outline = generate_outline(chunk, model_choice, temperature_summary, openai_api_key, language=language, custom_prompt=custom_prompt)
+                    outlines.append(outline)
+                    # Generate the summary based on the outline and revise it
+                    summary = summarize_and_revise(outline, chunk, model_choice, temperature_summary, temperature_revision, openai_api_key, language=language, custom_prompt=custom_prompt)
+                    summaries.append(summary)
+                    logger.info(f"Chunk {idx + 1} processed successfully.")
+                except Exception as e:
+                    logger.error(f"Error processing chunk {idx + 1}: {e}")
+                    st.error(f"Errore durante la generazione per il chunk {idx + 1}.")
+                    return
+
+            # Combine outlines and summaries into final versions
+            final_outline = combine_outlines(outlines, model_choice, temperature_revision, openai_api_key, language=language)
+            final_summary = combine_summaries(summaries, model_choice, temperature_revision, openai_api_key, language=language)
+
+            # Display the final outline
+            st.write("### Outline Generato:")
+            st.write(final_outline, unsafe_allow_html=True)
+
+            # Display the final summary
+            st.write("### Riassunto Generato:")
+            st.write(final_summary, unsafe_allow_html=True)
+
+            # Create and save DOCX and TXT files for the summary and outline
+            outline_docx = create_docx(final_outline)
+            summary_docx = create_docx(final_summary)
+            outline_txt = create_txt(final_outline)
+            summary_txt = create_txt(final_summary)
+
+            # Provide download options for the generated files
+            st.download_button("Scarica l'Outline (DOCX)", outline_docx.getvalue(), f"{file_basename}_outline.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            st.download_button("Scarica il Riassunto (DOCX)", summary_docx.getvalue(), f"{file_basename}_riassunto.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            st.download_button("Scarica l'Outline (TXT)", outline_txt.getvalue(), f"{file_basename}_outline.txt", "text/plain")
+            st.download_button("Scarica il Riassunto (TXT)", summary_txt.getvalue(), f"{file_basename}_riassunto.txt", "text/plain")
+            logger.info("Outline and summary files generated and ready for download.")
+
 # Run the main function if the script is executed
 def main():
     logger.info("Running main function")
@@ -367,4 +467,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
