@@ -5,7 +5,7 @@ from amm.crea_database import create_database
 from amm.delete_file import delete_file_from_database
 from query_database.query_gpt import query_db_gpt4
 from query_database.query_claude import query_db_claude
-from tool.pdf_summary import pdf_summary
+from EduRag.app.tool.pdf_summary_old import pdf_summary
 from tool.pdf_summary_a import pdf_summary_a
 from tool.open_question import open_question
 from utilizzo.uso import get_uso
