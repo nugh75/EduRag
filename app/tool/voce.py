@@ -22,6 +22,15 @@ language_dict = {
     "Swedish": {
         "Sofie": "sv-SE-SofieNeural",
         "Mattias": "sv-SE-MattiasNeural"
+    },
+    "French": {
+        "Charline": "fr-BE-CharlineNeural",
+        "Gerard": "fr-BE-GerardNeural",
+        "Sylvie": "fr-CA-SylvieNeural",
+        "Antoine": "fr-CA-AntoineNeural",
+        "Jean": "fr-CA-JeanNeural",
+        "Ariane": "fr-CH-ArianeNeural",
+        "Fabrice": "fr-CH-FabriceNeural"
     }
 }
 
