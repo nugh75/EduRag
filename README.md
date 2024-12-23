@@ -31,7 +31,7 @@ Tuttavia, c'è il rischio che gli studenti li usino per completare i compiti sen
 ### Il progetto EduRag
 Il progetto Edubot si propone di affrontare le sfide legate all'uso dei LLMs nell'istruzione, offrendo un esempio di approccio responsabile. Edubot ha l'obiettivo di sviluppare un chatbot didattico che supporti gli studenti nel loro apprendimento, non semplicemente fornendo risposte, ma guidandoli a comprendere e approfondire i contenuti. L'idea è di promuovere un apprendimento attivo e consapevole, integrando la tecnologia in modo etico e rispettoso delle metodologie pedagogiche moderne.
 
-### Come è fatto Edubot e quali sono le tecnologie alla base
+### Come è fatto EduRag e quali sono le tecnologie alla base
 Edubot è uno software scritto in **python** che utilizza diverse librerie e framework. **Streamlit** e **LangChain** sono le principali. 
 
 - Streamlit consente di costruire un'interfaccia grafica in HTML per l'inserimento di input e la visualizzazione di output, rendendo più intuitiva l'interazione con l'utente. 
